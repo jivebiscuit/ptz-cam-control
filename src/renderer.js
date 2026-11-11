@@ -1,4 +1,6 @@
 const $ = (s) => document.querySelector(s);
+// camera names/addresses are user-typed text: always escape them before they go into HTML
+const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 let cfg, sel = 0, tileEls = [];
 const state = { proto: 'http', locked: {} }; // locked[camIndex] — camera can't report lock state, so we track it
 
@@ -11,20 +13,22 @@ const cam = (a, forceVisca) => (forceVisca || state.proto === 'visca' ? window.a
   .then((r) => { if (!r.ok) setStatus(`${cfg.cameras[sel].name}: ${r.error}`, true); return r; });
 
 // ---- multiview: live MJPEG from local ffmpeg-backed stream server ----
-let streamPort = 0;
+let streamBase = ''; // http://127.0.0.1:<port>/cam/<token>  (from the main process)
 function buildTiles() {
   const mv = $('#multiview'); mv.innerHTML = ''; tileEls = [];
   cfg.cameras.forEach((c, i) => {
     const t = document.createElement('div'); t.className = 'cell off';
-    t.innerHTML = `<div class="tile"><img alt=""><div class="tag">${i + 1} · ${c.name}<i>${c.ip}</i></div><div class="badges"><span class="trk"></span><span class="pimg"></span><span class="fmode"></span></div></div>
+    t.innerHTML = `<div class="tile"><img alt=""><div class="tag">${i + 1} · ${esc(c.name)}<i>${esc(c.ip)}</i></div><div class="badges"><span class="trk"></span><span class="pimg"></span><span class="fmode"></span></div></div>
       <div class="cap"><div class="pos stale"><span class="pp">— no position —</span><span class="adv"></span></div><div class="exp"></div></div>`;
+    const img = t.querySelector('img');
+    img.addEventListener('error', () => setTimeout(() => { if (streamBase) img.src = `${streamBase}/${i}?t=${Date.now()}`; }, 1500));
     t.onclick = () => select(i);
     mv.appendChild(t); tileEls.push(t);
   });
   select(sel);
 }
 function attachStreams() {
-  tileEls.forEach((t, i) => { t.querySelector('img').src = `http://127.0.0.1:${streamPort}/cam/${i}?t=${Date.now()}`; });
+  tileEls.forEach((t, i) => { t.querySelector('img').src = `${streamBase}/${i}?t=${Date.now()}`; });
 }
 async function watchStreams() {
   const [st, why] = await Promise.all([window.api.streamStatus(), window.api.streamErrors()]);
@@ -33,7 +37,7 @@ async function watchStreams() {
     t.classList.toggle('off', off);
     t.querySelector('.tile').dataset.why = off ? why[i] || '' : ''; // reason shown under NO SIGNAL (e.g. ffmpeg missing)
     // A camera that just came back needs a fresh HTTP connection (old one may be dead)
-    if (wasOff && !off) t.querySelector('img').src = `http://127.0.0.1:${streamPort}/cam/${i}?t=${Date.now()}`;
+    if (wasOff && !off) t.querySelector('img').src = `${streamBase}/${i}?t=${Date.now()}`;
   });
 }
 function renderLock() {
@@ -137,22 +141,27 @@ function openSettings() {
   const f = $('#camFields'); f.innerHTML = '';
   cfg.cameras.forEach((c, i) => {
     const d = document.createElement('div'); d.className = 'cf';
-    d.innerHTML = `<input value="${c.name}"><input value="${c.ip}">`; f.appendChild(d);
+    const nameIn = document.createElement('input'); nameIn.value = c.name; nameIn.maxLength = 24; nameIn.setAttribute('aria-label', `Camera ${i + 1} name`);
+    const ipIn = document.createElement('input'); ipIn.value = c.ip; ipIn.maxLength = 253; ipIn.setAttribute('aria-label', `Camera ${i + 1} address`);
+    d.append(nameIn, ipIn); f.appendChild(d);
   });
+  $('#cfgErr').hidden = true;
   $('#dlg').hidden = false;
 }
 $('#settingsBtn').onclick = openSettings;
 $('#cancelCfg').onclick = () => ($('#dlg').hidden = true);
 $('#saveCfg').onclick = async () => {
   const cams = [...document.querySelectorAll('.cf')].map((d) => ({ name: d.children[0].value.trim(), ip: d.children[1].value.trim() }));
-  cfg = await window.api.setConfig({ cameras: cams });
-  $('#dlg').hidden = true; streamPort = await window.api.startStreams(); buildTiles(); attachStreams();
+  const r = await window.api.setConfig({ cameras: cams });
+  if (!r.ok) { $('#cfgErr').textContent = r.error; $('#cfgErr').hidden = false; return; } // keep the dialog open so it can be fixed
+  cfg = r.config;
+  $('#dlg').hidden = true; streamBase = await window.api.startStreams(); buildTiles(); attachStreams();
 };
 
 (async () => {
   cfg = await window.api.getConfig();
   initControls(); buildTiles();
-  streamPort = await window.api.startStreams(); attachStreams();
+  streamBase = await window.api.startStreams(); attachStreams();
   setInterval(watchStreams, 1000);
 })();
 
@@ -397,10 +406,10 @@ function renderImg() {
     const d = $('#img-' + c.key), r = d.querySelector('input'), mine = lastImg[sel] ? lastImg[sel][c.key] : null;
     if (mine != null && document.activeElement !== r) { r.value = mine; d.querySelector('.val').textContent = c.fmt(mine); }
     // short camera tag: first letter of its name if unique, else its number
-    const tag = (i) => { const n = cfg.cameras[i].name.trim(); const ch = n[0] ? n[0].toUpperCase() : ''; return ch && cfg.cameras.filter((x) => (x.name.trim()[0] || '').toUpperCase() === ch).length === 1 ? ch : String(i + 1); };
+    const tag = (i) => { const n = cfg.cameras[i].name.trim(); const ch = n[0] ? n[0].toUpperCase() : ''; return esc(ch && cfg.cameras.filter((x) => (x.name.trim()[0] || '').toUpperCase() === ch).length === 1 ? ch : String(i + 1)); };
     d.querySelector('.per').innerHTML = cfg.cameras.map((camera, i) => {
       const v = lastImg[i] ? lastImg[i][c.key] : null;
-      return `<span title="${camera.name}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${tag(i)} ${v == null ? '—' : c.fmt(v)}</span>`;
+      return `<span title="${esc(camera.name)}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${tag(i)} ${v == null ? '—' : c.fmt(v)}</span>`;
     }).join('');
   });
 }
@@ -438,12 +447,12 @@ const METER_S = ['Avg', 'Ctr', 'Smt', 'Top'], FLICK = ['Off', '50 Hz', '60 Hz'];
 const lastAdv = [];
 const advBusyArr = [], advT = [];
 const advBusyAny = () => advBusyArr.some(Boolean);
-const camTag = (i) => { const n = cfg.cameras[i].name.trim(); const ch = n[0] ? n[0].toUpperCase() : ''; return ch && cfg.cameras.filter((x) => (x.name.trim()[0] || '').toUpperCase() === ch).length === 1 ? ch : String(i + 1); };
+const camTag = (i) => { const n = cfg.cameras[i].name.trim(); const ch = n[0] ? n[0].toUpperCase() : ''; return esc(ch && cfg.cameras.filter((x) => (x.name.trim()[0] || '').toUpperCase() === ch).length === 1 ? ch : String(i + 1)); };
 function perLine(id, get, fmt) {
   const mine = lastAdv[sel] ? get(lastAdv[sel]) : null;
   $('#' + id).innerHTML = cfg.cameras.map((camera, i) => {
     const v = lastAdv[i] ? get(lastAdv[i]) : null;
-    return `<span title="${camera.name}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${camTag(i)} ${v == null ? '—' : fmt(v)}</span>`;
+    return `<span title="${esc(camera.name)}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${camTag(i)} ${v == null ? '—' : fmt(v)}</span>`;
   }).join('');
 }
 // Tile captions no longer list meter/DRC/flicker or image settings; instead an orange badge shows up only when a
@@ -618,7 +627,7 @@ function renderIsp() {
   const chk = $('#ispChk');
   chk.checked = known.length > 0 && known.every((v) => v === 1);
   chk.indeterminate = known.length > 0 && known.some((v) => v === 1) && known.some((v) => v === 0);
-  $('#per-isp').innerHTML = cfg.cameras.map((camera, i) => `<span title="${camera.name}" class="${vals[i] === 1 ? 'diff' : ''}">${camTag(i)} ${vals[i] === null ? '—' : vals[i] ? 'ON' : 'off'}</span>`).join('');
+  $('#per-isp').innerHTML = cfg.cameras.map((camera, i) => `<span title="${esc(camera.name)}" class="${vals[i] === 1 ? 'diff' : ''}">${camTag(i)} ${vals[i] === null ? '—' : vals[i] ? 'ON' : 'off'}</span>`).join('');
   tileEls.forEach((t, i) => {
     const el = t.querySelector('.pimg'); if (!el) return;
     el.textContent = vals[i] === 1 ? 'PRESET IMG' : '';
@@ -673,7 +682,7 @@ function renderTrack() {
     syncBlink(b, !!b.textContent);
   });
   document.querySelectorAll('#trkSeg button, #trkQuick button').forEach((b) => b.classList.toggle('trkcur', !!t && b.dataset.mode === t.trackMode));
-  $('#per-trkmode').innerHTML = cfg.cameras.map((c, i) => { const x = lastTrack[i], m = x ? x.trackMode : null; return `<span title="${c.name}: ${m ? TRK_NAMES[m] : 'no reply'}" class="${m && m !== 'off' ? 'diff' : ''}">${camTag(i)} ${m ? ({ off: 'Off', tracking: 'Track', autoframe: 'Frame' })[m] : '—'}</span>`; }).join('');
+  $('#per-trkmode').innerHTML = cfg.cameras.map((c, i) => { const x = lastTrack[i], m = x ? x.trackMode : null; return `<span title="${esc(c.name)}: ${m ? TRK_NAMES[m] : 'no reply'}" class="${m && m !== 'off' ? 'diff' : ''}">${camTag(i)} ${m ? ({ off: 'Off', tracking: 'Track', autoframe: 'Frame' })[m] : '—'}</span>`; }).join('');
   if (!t) return;
   $('#trkHint').textContent = t.trackMode === 'tracking' ? 'Following one person in view.' : t.trackMode === 'autoframe' ? 'Keeping everyone in view framed.' : 'Tracking is off for this camera.';
   if (document.activeElement !== $('#trkDelay')) { $('#trkDelay').value = t.delayTime; $('#trkDelayV').textContent = t.delayTime + ' s'; }

@@ -12,7 +12,7 @@ const shared = {
 export default [
   { ignores: ['node_modules/**', 'dist/**'] },
   js.configs.recommended,
-  { files: ['src/main.js', 'src/visca.js', 'src/streams.js', 'src/preload.js', 'scripts/*.js', 'eslint.config.mjs'],
+  { files: ['src/*.js', 'scripts/*.js', 'eslint.config.mjs'], ignores: ['src/renderer.js'],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } }, rules: shared },
   { files: ['eslint.config.mjs'], languageOptions: { sourceType: 'module' } },
   { files: ['src/renderer.js'],

@@ -2,6 +2,7 @@
 // a localhost multipart HTTP stream that the renderer shows in a plain <img>.
 const { spawn } = require('child_process');
 const http = require('http');
+const crypto = require('crypto');
 
 // ffmpeg-static ships ONE platform's binary (whichever platform `npm install` ran on); SOTH_FFMPEG overrides it
 // (e.g. to point at a system ffmpeg). Inside a packaged app the binary lives in app.asar.unpacked.
@@ -10,6 +11,7 @@ if (ffmpegPath && ffmpegPath.includes('app.asar')) ffmpegPath = ffmpegPath.repla
 
 const BOUNDARY = 'ffmpeg';
 const RETRY_MIN = 2000, RETRY_MAX = 15000; // reconnect delay grows while a feed keeps failing, resets once video flows
+const MAX_BUFFERED = 4 * 1024 * 1024;     // a viewer that falls this far behind is cut off (the page reconnects) instead of growing memory
 
 class Feed {
   constructor(url) {
@@ -35,7 +37,11 @@ class Feed {
     this.proc = proc;
     proc.stdout.on('data', (d) => {
       this.live = true; this.error = ''; this.delay = RETRY_MIN;
-      for (const res of this.clients) if (!res.destroyed) res.write(d);
+      for (const res of this.clients) {
+        if (res.destroyed) { this.clients.delete(res); continue; }
+        if (res.writableLength > MAX_BUFFERED) { this.clients.delete(res); res.destroy(); continue; }
+        res.write(d);
+      }
     });
     proc.stderr.on('data', (d) => { this.error = String(d).trim().split('\n').pop().slice(0, 160); }); // ffmpeg's last complaint
     // spawn itself failed (binary missing, not executable, wrong platform): without this handler Node would throw
@@ -67,16 +73,21 @@ class Feed {
 }
 
 class StreamServer {
-  constructor() { this.feeds = []; this.server = null; this.port = 0; }
+  // The server only listens on 127.0.0.1, and every request must carry a random per-run token in its path and a
+  // loopback Host header, so other programs (or web pages in a browser) cannot watch the camera feeds.
+  constructor() { this.feeds = []; this.server = null; this.port = 0; this.token = crypto.randomBytes(16).toString('hex'); }
+
+  get base() { return `http://127.0.0.1:${this.port}/cam/${this.token}`; }
 
   async start(cameras, stream = 2) {
     this.stopFeeds();
     this.feeds = cameras.map((c) => new Feed(`rtsp://${c.ip}:554/${stream}`));
     this.feeds.forEach((f) => f.start());
-    if (this.server) return this.port;
+    if (this.server) return this.base;
     this.server = http.createServer((req, res) => {
-      const m = /^\/cam\/(\d+)/.exec(req.url);
-      const feed = m && this.feeds[+m[1]];
+      const m = /^\/cam\/([0-9a-f]{32})\/(\d+)(?:\?|$)/.exec(req.url);
+      const hostOk = req.headers.host === `127.0.0.1:${this.port}`;
+      const feed = m && hostOk && m[1] === this.token && this.feeds[+m[2]];
       if (!feed) { res.writeHead(404); return res.end(); }
       res.writeHead(200, {
         'Content-Type': `multipart/x-mixed-replace;boundary=${BOUNDARY}`,
@@ -88,7 +99,7 @@ class StreamServer {
     });
     await new Promise((r) => this.server.listen(0, '127.0.0.1', r));
     this.port = this.server.address().port;
-    return this.port;
+    return this.base;
   }
 
   status() { return this.feeds.map((f) => f.live); }
