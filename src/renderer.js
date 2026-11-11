@@ -1,6 +1,4 @@
 const $ = (s) => document.querySelector(s);
-// camera names/addresses are user-typed text: always escape them before they go into HTML
-const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 let cfg, sel = 0, tileEls = [];
 const state = { proto: 'http', locked: {} }; // locked[camIndex] — camera can't report lock state, so we track it
 
@@ -178,17 +176,6 @@ const fmtLR = (u) => side(u, 'R', 'L'), fmtUD = (u) => side(u, 'U', 'D');
 function syncBlink(el, active) {
   if (!active) { el.dataset.sync = ''; el.style.animationDelay = ''; return; }
   if (!el.dataset.sync) { el.style.animationDelay = `-${Date.now() % 1000}ms`; el.dataset.sync = '1'; }
-}
-
-// ---- polling helper: every camera is polled on its own (a slow camera never delays the others), and a brief
-// hiccup keeps the last good value instead of blanking it; it only clears after staleMs without a good reply ----
-function pollOne(busy, store, times, i, fetchOne, staleMs) {
-  if (busy[i]) return Promise.resolve();
-  busy[i] = true;
-  const miss = () => { if (Date.now() - (times[i] || 0) > staleMs) store[i] = null; };
-  return Promise.resolve().then(() => fetchOne(i))
-    .then((r) => { if (r && r.ok) { store[i] = r.data; times[i] = Date.now(); } else miss(); }, miss)
-    .finally(() => { busy[i] = false; });
 }
 
 // ---- live position readout (VISCA, every 500 ms, each camera independent; dims when a reply is late) ----

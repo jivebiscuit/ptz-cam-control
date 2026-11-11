@@ -240,9 +240,12 @@ function createWindow() {
   rebuildClients();
   // this app only ever shows its own page: no permission prompts (camera/mic/location...), no pop-ups, no navigation away
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  // Automated tests set SOTH_TEST_HIDDEN=1 so they never put a window (or a Dock icon) on the desktop.
+  const hidden = process.env.SOTH_TEST_HIDDEN === '1';
+  if (hidden && process.platform === 'darwin' && app.dock) app.dock.hide();
   win = new BrowserWindow({
-    width: 1500, height: 900, backgroundColor: '#111',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false },
+    width: 1500, height: 900, backgroundColor: '#111', show: !hidden,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: !hidden },
   });
   win.setMenuBarVisibility(false);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

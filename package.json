@@ -4,10 +4,12 @@
   "description": "PTZ camera control and multiview for 4 PTZOptics cameras",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/run-electron.js .",
     "dist:win": "node scripts/ffmpeg-check.js win32 && electron-builder --win portable --x64 && node scripts/ffmpeg-check.js win32 --packaged",
     "dist:mac": "node scripts/ffmpeg-check.js darwin && electron-builder --mac dir && node scripts/ffmpeg-check.js darwin --packaged",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "test": "node --test \"test/unit/*.test.js\"",
+    "test:app": "node scripts/run-electron.js test/app/run.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
