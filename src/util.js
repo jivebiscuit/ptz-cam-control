@@ -1,4 +1,4 @@
-// Small helpers shared by the page (loaded by index.html before renderer.js) and by the automated tests (Node).
+// Small helpers shared by the page (loaded by index.html before the other scripts) and by the automated tests (Node).
 
 // Camera names/addresses are user-typed text: always escape them before they go into HTML.
 function esc(t) {

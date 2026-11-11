@@ -29,19 +29,45 @@ function fakeRequest(onResponse, bodyText, fail) {
   });
   return req;
 }
-http.get = (o, cb) => {
-  const p = o.path || '';
-  const w = isWrite('GET', p);
-  if (w) writes.push({ cam: camOf(o.host), what: label('GET', p) });
-  const r = fakeRequest(cb, '', !w); r.end(); return r;
-};
-http.request = (o, cb) => {
+// Optional stateful cameras for the "copy to other cameras" tests: they answer the two config reads and apply writes.
+const cams = { on: false, s: [0, 1, 2, 3].map(() => ({ exposure_mode: '10', iris: '17', shutter: '3', manual_gain: '4', gain_limit: '8', meter: '0', drc: '0', antiflicker: '2',
+  wb_mode: '5', rgain: '60', bgain: '160', rgain_tuning: '10', bgain_tuning: '10', temperature: '20', focus_mode: '2', focus_mode_status: 'unlock',
+  luminance: '7', saturation: '7', contrast: '7', sharpness: '7', hue: '7' })), ignoreFirst: {} };
+const NAME_TO_KEY = { luminance: 'luminance', saturation: 'saturation', contrast: 'contrast', sharpness: 'sharpness', hue: 'hue', gainLimit: 'gain_limit', meter: 'meter', drc: 'drc',
+  wbmode: 'wb_mode', rgain: 'rgain', bgain: 'bgain', rgaintuning: 'rgain_tuning', bgaintuning: 'bgain_tuning', colortemp: 'temperature' };
+// a write to camera i; the first write of `ignoreFirst["<i>:<key>"]` is dropped, like a camera that is busy switching modes
+function camWrite(i, key, value) {
+  const k = `${i}:${key}`;
+  if (cams.ignoreFirst[k]) { delete cams.ignoreFirst[k]; return; }
+  cams.s[i][key] = String(value);
+}
+function camRead(o, p) {
+  if (!cams.on) return null;
+  const st = cams.s[camOf(o.host)];
+  if (/get_advance_image_conf/.test(p)) return Object.entries(st).map(([k, v]) => `${k}="${v}"`).join('\n');
+  if (/get_image_conf/.test(p)) return ['luminance', 'saturation', 'contrast', 'sharpness', 'hue'].map((k) => `${k === 'luminance' ? 'bright' : k}="${st[k]}"`).join('\n');
+  return null;
+}
+// the app sends every camera request through http.request (reads and commands alike); http.get is faked the same way
+function fakeHttp(o, cb) {
   const p = o.path || '', m = o.method || 'GET', w = isWrite(m, p);
-  if (w) writes.push({ cam: camOf(o.host), what: label(m, p) });
-  return fakeRequest(cb, w ? '{"msg":"operate success"}' : '', !w);
-};
+  if (w) {
+    writes.push({ cam: camOf(o.host), what: label(m, p) });
+    const mm = /post_image_value&(\w+)&(\d+)/.exec(p);
+    if (mm && NAME_TO_KEY[mm[1]]) camWrite(camOf(o.host), NAME_TO_KEY[mm[1]], mm[2]);
+  }
+  const body = w ? (m === 'POST' ? '{"msg":"operate success"}' : '') : camRead(o, p);
+  return fakeRequest(cb, body || '', !w && body === null);
+}
+http.get = (o, cb) => { const r = fakeHttp(o, cb); r.end(); return r; };
+http.request = fakeHttp;
 const { ViscaClient } = require('../../src/visca');
-ViscaClient.prototype.send = async function (hex) { writes.push({ cam: camOf(this.host), what: 'visca:' + hex }); };
+ViscaClient.prototype.send = async function (hex) {
+  writes.push({ cam: camOf(this.host), what: 'visca:' + hex });
+  const i = camOf(this.host), b = hex.split(' ');
+  if (b[2] === '04' && b[3] === '39') camWrite(i, 'exposure_mode', parseInt(b[4], 16));
+  if (b[2] === '04' && ['4a', '4b', '4c'].includes(b[3]) && b[4] === '00') camWrite(i, { '4a': 'shutter', '4b': 'iris', '4c': 'manual_gain' }[b[3]], (parseInt(b[6], 16) & 15) * 16 + (parseInt(b[7], 16) & 15));
+};
 ViscaClient.prototype.inquire = async function () { throw new Error('offline'); };
 
 require('../../src/main.js');
@@ -118,6 +144,43 @@ app.whenReady().then(async () => {
     await refuse('visca', 0, { type: 'aeMode', mode: 7 }, 'an exposure mode that does not exist');
     await refuse('visca', 0, { type: 'focusLock', on: 1 }, 'focus lock given 1 instead of true/false');
 
+    console.log('\n-- copy to the other cameras (stateful fake cameras) --');
+    cams.on = true;
+    const status = () => js(`document.querySelector('#status').textContent`);
+    const startCopy = (btn) => js(`document.querySelector('#status').textContent = ''; 0`).then(() => click(btn)); // clear the old message so we wait for THIS copy's result
+    const cmp = (keys) => [1, 2, 3].every((i) => keys.every((k) => cams.s[i][k] === cams.s[0][k]));
+    await js(`document.querySelectorAll('.cell')[0].click(); 0`);
+    // Color: camera 0 is Manual with its own gains; the others start different, and camera 2 drops its first red-gain write
+    Object.assign(cams.s[0], { wb_mode: '5', rgain: '70', bgain: '150' });
+    cams.ignoreFirst['2:rgain'] = true;
+    await click('#drawerBtns button[data-drawer="drawer-color"]'); await wait(2600);
+    await startCopy('#copyColor');
+    for (let k = 0; k < 40 && !/verified|still different/.test(await status()); k++) await wait(500);
+    check(cmp(['wb_mode', 'rgain', 'bgain']) && /verified/.test(await status()), 'Copy white balance: every camera ends with the same mode and gains, even though one dropped a write');
+    check((await js(`document.querySelector('#copyColor').disabled`)) === false, 'the Copy button is usable again afterwards');
+    // Image
+    Object.assign(cams.s[0], { luminance: '9', saturation: '5', contrast: '8', sharpness: '3', hue: '6' });
+    await click('#drawerBtns button[data-drawer="drawer-image"]'); await wait(2600);
+    await startCopy('#copyImage');
+    for (let k = 0; k < 30 && !/verified|still different/.test(await status()); k++) await wait(500);
+    check(cmp(['luminance', 'saturation', 'contrast', 'sharpness', 'hue']) && /verified/.test(await status()), 'Copy image settings: every camera ends with the same five values');
+    // Exposure: Shutter priority, shutter 6 and gain limit 5 (iris and gain are not copied in this mode)
+    Object.assign(cams.s[0], { exposure_mode: '10', shutter: '6', gain_limit: '5' }); cams.s[1].exposure_mode = '3'; cams.s[3].exposure_mode = '0';
+    await click('#drawerBtns button[data-drawer="drawer-exposure"]'); await wait(2600);
+    const beforeIris = cams.s[1].iris;
+    await startCopy('#copyAll');
+    for (let k = 0; k < 60 && !/verified|still different/.test(await status()); k++) await wait(500);
+    check(cmp(['exposure_mode', 'shutter', 'gain_limit']) && /verified/.test(await status()), 'Copy exposure: mode, shutter and gain limit match on every camera');
+    check(cams.s[1].iris === beforeIris, 'Copy exposure leaves the iris alone in Shutter priority');
+    // a camera that never changes is reported, not hidden
+    Object.assign(cams.s[0], { luminance: '2' });
+    const stuck = cams.s[2]; Object.defineProperty(stuck, 'luminance', { get: () => '7', set: () => {}, enumerable: true, configurable: true });
+    await wait(2600); await click('#drawerBtns button[data-drawer="drawer-image"]'); await wait(300); await click('#drawerBtns button[data-drawer="drawer-image"]'); await wait(2600);
+    await startCopy('#copyImage');
+    for (let k = 0; k < 30 && !/verified|still different/.test(await status()); k++) await wait(500);
+    check(/still different/.test(await status()) && /Luminance/.test(await status()), 'a camera that ignores a value is reported as "still different", not as success');
+    cams.on = false;
+
     console.log('\n-- settings --');
     const cfgFile = path.join(userData, 'config.json');
     const hash = () => (fs.existsSync(cfgFile) ? crypto.createHash('sha1').update(fs.readFileSync(cfgFile)).digest('hex') : 'absent');
@@ -159,4 +222,4 @@ app.whenReady().then(async () => {
   try { fs.rmSync(userData, { recursive: true, force: true }); } catch { /* best effort */ }
   app.exit(failed ? 1 : 0);
 });
-setTimeout(() => { console.log('FAIL  timed out'); app.exit(2); }, 90000);
+setTimeout(() => { console.log('FAIL  timed out'); app.exit(2); }, 150000);

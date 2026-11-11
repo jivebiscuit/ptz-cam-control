@@ -33,6 +33,12 @@ npm run dist:mac     # on a Mac: unpacked app in dist/
 The build scripts check that the bundled ffmpeg matches the target and refuse to continue if it does not.
 The Windows build has not yet been run on a Windows machine.
 
+## Code layout (`src/`)
+Main process: `main.js` (window, IPC, command validation), `camhttp.js` (HTTP to the cameras), `visca.js`, `streams.js` (ffmpeg video), `config.js`, `validate.js`.
+The page is plain scripts that share one global scope, loaded in this order by `index.html`: `util`, `copyflow` (copy-to-other-cameras logic), `core` (shared state and helpers), then one file per area
+(`tiles`, `controls`, `settings`, `position`, `exposure`, `drawers`, `image`, `adv`, `color`, `presets`, `tracking`) and `app` last (start-up).
+New page scripts must be added to `index.html`; lint reads that list, so it knows their shared names.
+
 ## Keyboard
 Arrow keys pan/tilt (hold to move, release to stop), Space stops, `H` goes Home, `1`–`4` selects a camera, `Esc` closes a drawer.
 Shortcuts are ignored while typing in a field.
