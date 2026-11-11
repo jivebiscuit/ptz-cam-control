@@ -27,10 +27,11 @@ function attachStreams() {
   tileEls.forEach((t, i) => { t.querySelector('img').src = `http://127.0.0.1:${streamPort}/cam/${i}?t=${Date.now()}`; });
 }
 async function watchStreams() {
-  const st = await window.api.streamStatus();
+  const [st, why] = await Promise.all([window.api.streamStatus(), window.api.streamErrors()]);
   tileEls.forEach((t, i) => {
     const wasOff = t.classList.contains('off'), off = !st[i];
     t.classList.toggle('off', off);
+    t.querySelector('.tile').dataset.why = off ? why[i] || '' : ''; // reason shown under NO SIGNAL (e.g. ffmpeg missing)
     // A camera that just came back needs a fresh HTTP connection (old one may be dead)
     if (wasOff && !off) t.querySelector('img').src = `http://127.0.0.1:${streamPort}/cam/${i}?t=${Date.now()}`;
   });

@@ -5,8 +5,8 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win portable --x64",
-    "dist:mac": "electron-builder --mac dir",
+    "dist:win": "node scripts/ffmpeg-check.js win32 && electron-builder --win portable --x64 && node scripts/ffmpeg-check.js win32 --packaged",
+    "dist:mac": "node scripts/ffmpeg-check.js darwin && electron-builder --mac dir && node scripts/ffmpeg-check.js darwin --packaged",
     "lint": "eslint . --max-warnings 0"
   },
   "devDependencies": {
@@ -28,6 +28,12 @@
     },
     "portable": {
       "artifactName": "SOTH-Cam-Control-portable.exe"
+    },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "mac": {
+      "identity": null
     }
   },
   "dependencies": {

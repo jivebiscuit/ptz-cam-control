@@ -30,7 +30,7 @@ body{margin:0;background:#111;color:#ddd;font:14px system-ui,sans-serif;user-sel
 .tile img{width:100%;height:100%;object-fit:contain;display:block}
 .tile .tag{position:absolute;left:8px;top:6px;background:#000a;padding:2px 8px;border-radius:3px;font-weight:600}
 .tile .tag i{font-style:normal;color:#888;font-weight:400;margin-left:6px}
-.cell.off .tile::after{content:"NO SIGNAL";position:absolute;inset:0;display:grid;place-items:center;color:#c55;background:#000c;font-size:20px}
+.cell.off .tile::after{content:"NO SIGNAL\A" attr(data-why);white-space:pre-line;text-align:center;line-height:1.4;padding:0 16px;position:absolute;inset:0;display:grid;place-items:center;align-content:center;color:#c55;background:#000c;font-size:20px}
 #panel{background:#1b1b1b;padding:12px 12px 0;border-left:1px solid #333;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #panelBody{flex:1;min-height:0;overflow:auto;padding-right:2px}
 #footer{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #2a2a2a;font-size:12px}

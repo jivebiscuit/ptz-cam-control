@@ -179,6 +179,7 @@ async function viscaCmd(i, a) {
 ipcMain.handle('config:get', () => config);
 ipcMain.handle('stream:start', () => streams.start(config.cameras));
 ipcMain.handle('stream:status', () => streams.status());
+ipcMain.handle('stream:errors', () => streams.errors());
 ipcMain.handle('config:set', (_e, c) => {
   config = { ...config, ...c };
   fs.mkdirSync(path.dirname(cfgPath()), { recursive: true });
