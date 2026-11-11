@@ -1,0 +1,32 @@
+{
+  "name": "soth-cam-control",
+  "version": "0.1.0",
+  "description": "PTZ camera control and multiview for 4 PTZOptics cameras",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable --x64",
+    "dist:mac": "electron-builder --mac dir"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.soth.camcontrol",
+    "productName": "SOTH Cam Control",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "SOTH-Cam-Control-portable.exe"
+    }
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0"
+  }
+}

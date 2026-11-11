@@ -1,0 +1,169 @@
+*{box-sizing:border-box}
+:root{color-scheme:dark;
+  /* ACCENT PALETTE: one hue per domain. Reserved for meaning, don't reuse: red (selected / focus lock / errors),
+     orange (value differs from selected camera / apply-to-all warning). A drawer picks its accent with data-accent="name". */
+  --c-ptz:#7f7;      /* position & movement */
+  --c-exp:#7cf;      /* exposure: mode, iris, shutter, gain */
+  --c-expx:#9aa;     /* exposure tuning: meter, gain limit, DRC, flicker */
+  --c-image:#b794f6; /* image: luminance, saturation, contrast, sharpness, hue */
+  --c-track:#f08cc4; /* tracking (reserved) */
+  --c-color:#3cc9b8; /* color / white balance (reserved) */
+}
+select{background:#111;color:#eee;border:1px solid #444;padding:4px 6px;border-radius:3px;font-size:13px;max-width:100%}
+button:focus{outline:none}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #5aa9ff;outline-offset:1px}
+body{margin:0;background:#111;color:#ddd;font:14px system-ui,sans-serif;user-select:none}
+#app{display:grid;grid-template-columns:minmax(0,1fr) 0 340px;height:100vh;transition:grid-template-columns .18s ease}
+#app.has-drawer{grid-template-columns:minmax(0,1fr) 340px 340px}
+#drawerHost{min-width:0;overflow:hidden;background:#1f1f1f}
+#app.has-drawer #drawerHost{border-left:1px solid #333}
+#multiview{container-type:size;display:grid;grid-template-columns:repeat(2,auto);grid-auto-rows:auto;justify-content:center;align-content:center;gap:6px;padding:6px;min-height:0;min-width:0}
+/* each tile is 16:9 and as large as fits: half the width, or half the height at 16:9, whichever is smaller */
+.cell{display:flex;flex-direction:column;cursor:pointer;min-width:0;width:min(calc(50cqw - 3px), calc(((100cqh - 3px) / 2 - 48px) * 16 / 9))}
+.tile{position:relative;background:#000;border:3px solid #333;border-radius:4px 4px 0 0;overflow:hidden;min-height:0;aspect-ratio:16/9;width:100%}
+.cell.sel .tile{border-color:#e33}
+.cap{background:#0c0c0c;border:3px solid #333;border-top:none;border-radius:0 0 4px 4px;padding:3px 8px;min-height:42px;font:12px ui-monospace,Menlo,Consolas,monospace;line-height:1.35}
+.cell.sel .cap{border-color:#e33}
+.cap .pos{display:flex;gap:14px;white-space:nowrap;overflow:hidden;color:#7f7}.cap .pos.stale .pp{color:#777}
+.cap .exp{color:#7cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap .adv{color:#fb4;font-weight:700}
+.tile img{width:100%;height:100%;object-fit:contain;display:block}
+.tile .tag{position:absolute;left:8px;top:6px;background:#000a;padding:2px 8px;border-radius:3px;font-weight:600}
+.tile .tag i{font-style:normal;color:#888;font-weight:400;margin-left:6px}
+.cell.off .tile::after{content:"NO SIGNAL";position:absolute;inset:0;display:grid;place-items:center;color:#c55;background:#000c;font-size:20px}
+#panel{background:#1b1b1b;padding:12px 12px 0;border-left:1px solid #333;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#panelBody{flex:1;min-height:0;overflow:auto;padding-right:2px}
+#footer{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #2a2a2a;font-size:12px}
+#footer .tip{white-space:nowrap;color:#8d8d8d}
+header{display:flex;justify-content:space-between;align-items:center}
+h2{margin:0 0 8px;color:#fff}h3{margin:14px 0 6px;font-size:13px;color:#aaa}h3 small{color:#8d8d8d;font-weight:400}
+button{background:#333;color:#eee;border:1px solid #444;border-radius:4px;padding:7px 10px;cursor:pointer;font-size:14px}
+button:hover{background:#444}button:active,button.on{background:#c33}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.row input[type=range]{flex:1}
+.lbl{width:64px;color:#aaa;white-space:nowrap}
+.pad{display:grid;grid-template-columns:repeat(3,44px);gap:3px;justify-content:center;margin:8px 0}
+.pad button{height:38px;padding:0;font-size:16px}.pad .home{background:#255}
+#presets{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+#presets button{padding:8px 0}
+.nudge button{padding:5px 9px}
+#status{color:#8c8;min-height:16px;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#status.err{color:#e66}
+.hint{color:#8d8d8d;font-size:12px}
+#dlg{position:fixed;inset:0;background:#000a;display:grid;place-items:center}[hidden]{display:none!important}
+.box{background:#222;padding:16px;border-radius:6px;min-width:360px}
+.box input{background:#111;color:#eee;border:1px solid #444;padding:5px;border-radius:3px}
+.cf{display:flex;gap:6px;margin:4px 0}.cf input:first-child{width:110px}.cf input:last-child{flex:1}
+.tile .badges{position:absolute;right:8px;top:6px;display:flex;gap:6px;align-items:center}
+.tile .lock{background:#c80;color:#000;padding:2px 8px;border-radius:3px;font-weight:700;font-size:12px}
+.tile .fmode:not(:empty){background:#000a;color:var(--c-ptz);border:1px solid color-mix(in srgb,var(--c-ptz) 55%,#000);padding:1px 7px;border-radius:3px;font-weight:700;font-size:12px}
+.tile .fmode.mf{background:var(--c-ptz);color:#000;border-color:var(--c-ptz)}
+#afLock.on{background:#c80;color:#000;border-color:#c80}
+#readout{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;background:#111;border:1px solid #333;border-radius:4px;padding:8px;margin-top:10px;color:#999;font-size:12px}
+#readout b{color:#7f7;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;margin-left:4px}
+#readout.stale b{color:#666}
+#panel input[type=number]{background:#111;color:#eee;border:1px solid #444;padding:4px;border-radius:3px}
+.exv{text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;color:#7cf}
+.row small{color:#8d8d8d;font-size:11px}
+#panel .row{flex-wrap:wrap}
+
+#drawerBtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(66px,1fr));gap:6px;margin:2px 0 8px}
+#drawerBtns button{padding:6px 4px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#drawerBtns button.on{background:#246}
+.drawer{padding:12px;height:100vh;overflow:auto}
+.drawer.closed{display:none}
+.drawer header{display:flex;justify-content:space-between;align-items:center}
+.drawer header h3{margin:0;font-size:15px;color:#fff}
+.scope{display:flex;align-items:center;gap:6px;cursor:pointer}
+.scopeWarn{background:#a50;color:#fff;border-radius:4px;padding:5px 8px;margin:4px 0 8px;font-weight:600;font-size:12px}
+
+.imgc{margin:12px 0 6px}
+.imgc .top{display:grid;grid-template-columns:78px 26px minmax(0,1fr) 26px 50px;align-items:center;gap:6px}
+.imgc .nm{color:#bbb}
+.imgc input[type=range]{width:100%;min-width:0;margin:0}
+.imgc button{padding:0;height:26px;width:26px;line-height:1}
+.imgc .val{text-align:right;color:#7cf;font-family:ui-monospace,Menlo,Consolas,monospace}
+.imgc .per{margin:3px 0 0 84px;font:11px ui-monospace,Menlo,Consolas,monospace;color:#8a8a8a;display:flex;flex-wrap:wrap;gap:2px 10px}
+.imgc .per .diff{color:#fb4;font-weight:700}
+.tip{cursor:help;text-decoration:underline dotted #666;text-underline-offset:3px}
+
+/* shared drawer rows: label | controls, all on the same 78px label column */
+.sr,.xr,.slr{display:grid;align-items:center;gap:6px;margin:8px 0}
+.sr{grid-template-columns:78px minmax(0,1fr)}.sr select{width:100%}
+.xr{grid-template-columns:78px 26px minmax(0,1fr) 26px 96px}.xr select{width:100%}
+.slr{grid-template-columns:78px minmax(0,1fr) 56px}.slr input{width:100%;min-width:0;margin:0}.slr .exv{text-align:right}
+.sq{padding:0;height:26px;width:26px;line-height:1}
+.drawer .lbl{width:auto}
+.info{color:#8d8d8d;margin-left:4px}
+.drawerFoot{margin-top:18px;padding-top:12px;border-top:1px solid #2a2a2a}
+button.secondary{background:transparent;border-color:#555;color:#bbb;font-size:13px;width:100%}
+button.secondary:hover{background:#2a2a2a;color:#fff}
+#presetsBox{margin-top:12px}
+#presetsBox summary{cursor:pointer;color:#aaa;font-size:13px;font-weight:600;padding:4px 0}
+#presetsBox summary small{color:#8d8d8d;font-weight:400}
+#presetsBox #presets{margin-top:6px}
+
+.drawer>.per{margin:-4px 0 8px 84px;font:11px ui-monospace,Menlo,Consolas,monospace;color:#8a8a8a;display:flex;flex-wrap:wrap;gap:2px 10px}
+.drawer>.per .diff{color:#fb4;font-weight:700}
+
+/* ---- accents: color is a cue only (labels always stay); controls stay neutral grey ---- */
+.drawer{border-left:3px solid var(--accent,#444)}
+.drawer>header h3,.drawer>h3{color:var(--accent,#fff)}
+.drawer h3.tune{color:var(--c-expx)}
+.tune-row .exv{color:var(--c-expx)}
+.drawer .lbl.tip,.imgc .nm{text-decoration-color:var(--accent,#666)}
+#drawerBtns button{border-bottom:3px solid var(--accent,#444)}
+#drawerBtns button.on{background:color-mix(in srgb,var(--accent,#246) 24%,#1b1b1b);border-color:var(--accent,#444)}
+.imgc .val{color:var(--accent,#7cf)}
+.drawer input[type=range]{accent-color:var(--accent,#3b82f6)}
+.pad button:not(.home),button[data-z],button[data-f]{border-bottom:3px solid color-mix(in srgb,var(--c-ptz) 55%,#333)}
+.pad .home{border-bottom:3px solid var(--c-ptz)}
+
+.dim{opacity:.38;pointer-events:none}
+.drawer .row button#onePush{width:100%}
+
+button.cur{box-shadow:inset 0 -3px 0 var(--c-ptz);border-color:color-mix(in srgb,var(--c-ptz) 60%,#444)}
+
+#presetsBox .per{margin:2px 0 4px 26px;font:11px ui-monospace,Menlo,Consolas,monospace;color:#8a8a8a;display:flex;flex-wrap:wrap;gap:2px 10px}
+#presetsBox .per .diff{color:#fb4;font-weight:700}
+.tile .pimg:not(:empty){background:#a50;color:#fff;padding:1px 7px;border-radius:3px;font-weight:700;font-size:12px}
+
+/* preset image-recall setting: a small labelled group under the preset buttons */
+#presetsBox .ispWrap{margin-top:14px;padding-top:10px;border-top:1px solid #2a2a2a}
+.ispRow{display:flex;align-items:center;gap:10px;cursor:pointer;color:#ccc;line-height:1.3}
+.ispRow input{width:16px;height:16px;margin:0;flex:none;accent-color:var(--c-ptz)}
+.ispRow span{flex:1;min-width:0}
+.ispHint{margin:2px 0 0 26px;font-size:11px}
+
+/* tracking: segmented mode control, location pickers, badge (pink accent) */
+.seg{display:flex;gap:0}.seg button{border-radius:0;border-bottom:3px solid transparent;padding:6px 10px}
+.seg button:first-child{border-radius:4px 0 0 4px}.seg button:last-child{border-radius:0 4px 4px 0}
+.seg.mini button{padding:5px 12px}
+.seg button.trkcur{background:color-mix(in srgb,var(--c-track) 26%,#222);border-color:var(--c-track);border-bottom-color:var(--c-track);color:#fff}
+.seg button.trkcur[data-mode="off"]{background:#2b2b2b;border-color:#555;border-bottom-color:#777;color:#ddd}
+.drawer .seg{margin:6px 0 2px}
+.drawer .seg button{flex:1}
+.hint.noall{color:var(--c-track);margin:2px 0 6px}
+.loc{display:grid;grid-template-columns:78px minmax(0,1fr) 70px;gap:6px;align-items:center;margin:8px 0}
+.loc input[type=number]{width:100%;background:#111;color:#eee;border:1px solid #444;padding:4px;border-radius:3px}
+.loc input[type=number]:disabled{opacity:.35}
+.tile .trk:not(:empty){background:var(--c-track);color:#000;padding:1px 7px;border-radius:3px;font-weight:700;font-size:12px}
+#per-trkmode{margin-top:8px!important}
+
+.drawer>.per#per-trkmode{margin:8px 0 0 0;flex-wrap:nowrap;gap:2px 14px}
+
+/* chips for states that are NOT normal for a camera (tracking/framing, manual focus, focus locked, preset image recall):
+   they flip hard between a solid fill and an inverted outline (with a glow) so they can't be missed. Colors/effects only:
+   the chip never gets bigger. All flashing chips share one clock (see syncBlink) so they flip together. */
+.tile .trk:not(:empty) { --chip: var(--c-track); }
+.tile .fmode.mf { --chip: var(--c-ptz); }
+.tile .lock { --chip: #ffa31a; }
+.tile .pimg:not(:empty) { --chip: #ff6a2b; }
+@keyframes chipFlash {
+  0%, 49.9% { background: var(--chip); color: #000; box-shadow: 0 0 14px 2px var(--chip), inset 0 0 0 2px var(--chip); }
+  50%, 100% { background: #000;        color: var(--chip); box-shadow: 0 0 5px 0 var(--chip), inset 0 0 0 2px var(--chip); }
+}
+.tile .trk:not(:empty), .tile .fmode.mf, .tile .lock, .tile .pimg:not(:empty) { animation: chipFlash 1s step-end infinite; }
+/* reduced motion: no flashing, but keep a steady glow + ring so the state is still obvious */
+@media (prefers-reduced-motion: reduce) {
+  .tile .trk:not(:empty), .tile .fmode.mf, .tile .lock, .tile .pimg:not(:empty) { animation: none; background: var(--chip); color: #000; box-shadow: 0 0 12px 2px var(--chip), inset 0 0 0 2px #000; }
+}

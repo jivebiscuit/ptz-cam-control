@@ -1,0 +1,150 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>SOTH Cam Control</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' http: data: blob:; style-src 'self' 'unsafe-inline'">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<div id="app">
+  <section id="multiview"></section>
+
+  <!-- Accent colors: data-accent="exp|image|track|color|ptz|expx" (see the palette at the top of style.css).
+       Drawers sit in their own column (the video grid shrinks to make room). To add one, add another
+       <aside class="drawer closed" id="drawer-NAME" data-title="Title"> block: it gets its own button, header,
+       "apply to all" switch and open/close handling automatically. -->
+  <div id="drawerHost">
+    <aside class="drawer closed" id="drawer-exposure" data-title="Exposure" data-accent="exp" aria-hidden="true">
+      <h3>Mode · iris · shutter · gain</h3>
+      <div class="sr"><span class="lbl tip" title="Exposure mode — who controls what. Auto: the camera sets everything. Shutter priority: you set the shutter speed and the camera adjusts iris and gain. Iris priority: you set the iris and the camera adjusts shutter and gain. Manual: you set all three.">Mode</span>
+        <select id="aeMode"><option value="0">Auto</option><option value="3">Manual</option><option value="10">Shutter priority</option><option value="11">Iris priority</option><option value="13">Bright</option></select></div>
+      <div class="xr"><span class="lbl tip" title="Iris — the lens opening, shown as an F-number. A lower F-number (like F1.8) lets in more light and makes the background blurrier with a thinner zone of sharp focus. A higher F-number lets in less light and keeps more of the scene sharp.">Iris</span><button class="sq" data-ex="iris,down">−</button><b id="exIris" class="exv">—</b><button class="sq" data-ex="iris,up">+</button><select id="irisSel"><option value="">set…</option></select></div>
+      <div class="xr"><span class="lbl tip" title="Shutter — how long each frame is exposed. A faster shutter (1/500) freezes motion but needs more light. A slower shutter (1/30) brightens the picture but blurs movement. At 30 fps, 1/60 looks natural, and 1/30 and 1/60 avoid flicker from 60 Hz mains lights.">Shutter</span><button class="sq" data-ex="shutter,down">−</button><b id="exShutter" class="exv">—</b><button class="sq" data-ex="shutter,up">+</button><select id="shutSel"><option value="">set…</option></select></div>
+      <div class="xr"><span class="lbl tip" title="Gain — electronic brightening of the picture. It makes a dark scene brighter without more light, but adds grain/noise, mostly in the shadows.">Gain</span><button class="sq" data-ex="gain,down">−</button><b id="exGain" class="exv">—</b><button class="sq" data-ex="gain,up">+</button></div>
+      <p class="hint" id="exHint"></p>
+
+      <h3 class="tune">Auto-exposure tuning <span class="tip info" title="All of these are read live from the cameras. The line under each control shows every camera's value (S = South, C = Center, …); orange = differs from the selected camera. They apply in Auto, Shutter priority and Iris priority.">ⓘ</span></h3>
+      <div class="sr"><span class="lbl tip" title="Meter region — which part of the frame the camera measures to decide how bright to make the picture. Center follows the middle of the frame (good for a speaker), Average uses the whole frame, Top uses the top, Smart picks the best area itself.">Meter</span>
+        <select id="meterSel"><option value="">—</option><option value="0">Average</option><option value="1">Center</option><option value="2">Smart</option><option value="3">Top</option></select></div>
+      <div class="per" id="per-meter"></div>
+      <div class="slr tune-row"><span class="lbl tip" title="Gain limit — the most gain the camera is allowed to add when it adjusts exposure automatically. A low limit keeps the picture clean but darker in dim light. A high limit keeps it brighter but noisier.">Gain limit</span><input id="gainLim" type="range" min="0" max="15" step="1" value="8"><b id="gainLimV" class="exv">—</b></div>
+      <div class="per" id="per-gainLimit"></div>
+      <div class="slr"><span class="lbl tip" title="Dynamic range control — changes the intensity of highlights and shadows. It helps rooms with bright windows and dark areas look more balanced. Too much can make the picture look flat or bring up noise in the shadows.">DRC</span><input id="drc" type="range" min="0" max="8" step="1" value="4"><b id="drcV" class="exv">—</b></div>
+      <div class="per" id="per-drc"></div>
+      <div class="sr"><span class="lbl tip" title="Anti-flicker — matches the camera to your lights' mains frequency (60 Hz in the US, 50 Hz in much of the rest of the world) so lights don't pulse or band on camera.">Flicker</span>
+        <select id="flickerSel"><option value="">—</option><option value="0">Off</option><option value="1">50 Hz</option><option value="2">60 Hz</option></select></div>
+      <div class="per" id="per-flicker"></div>
+      <p class="hint">Sliders send on release.</p>
+
+      <div class="drawerFoot"><button class="secondary" id="copyAll" title="Copy exposure mode, shutter, iris and gain limit from this camera to the other cameras">Copy to other cameras</button></div>
+    </aside>
+
+
+
+
+    <aside class="drawer closed" id="drawer-image" data-title="Image" data-accent="image" aria-hidden="true">
+      <div id="imgControls"></div>
+      <p class="hint">Read from the cameras every 2 s. The line under each slider shows every camera's value (S = South, C = Center, …). Orange = differs from the selected camera. Sliders send on release.</p>
+      <div class="drawerFoot"><button class="secondary" id="copyImage" title="Copy luminance, saturation, contrast, sharpness and hue from this camera to the other cameras">Copy to other cameras</button></div>
+    </aside>
+
+    <aside class="drawer closed" id="drawer-color" data-title="Color" data-accent="color" aria-hidden="true">
+      <h3>White balance</h3>
+      <div class="sr"><span class="lbl tip" title="White balance mode — how the camera decides what 'white' looks like so colors aren't tinted. Auto adjusts continuously. Indoor and Outdoor are presets. Manual lets you set red and blue gain by hand and then stays put (steady, but won't follow changing light). One push measures the scene once. Color temp lets you pick a color temperature.">Mode</span>
+        <select id="wbMode"></select></div>
+      <div class="per" id="per-wbmode"></div>
+
+      <div class="slr" id="row-rgain"><span class="lbl tip" title="Red gain — how much red is in the picture. Higher looks warmer and redder, lower looks cooler. Manual mode only.">Red gain</span><input id="rgain" type="range" min="0" max="255" step="1" value="0"><b id="rgainV" class="exv">—</b></div>
+      <div class="per" id="per-rgain"></div>
+      <div class="slr" id="row-bgain"><span class="lbl tip" title="Blue gain — how much blue is in the picture. Higher looks cooler and bluer, lower looks warmer. Manual mode only.">Blue gain</span><input id="bgain" type="range" min="0" max="255" step="1" value="0"><b id="bgainV" class="exv">—</b></div>
+      <div class="per" id="per-bgain"></div>
+
+      <div class="slr" id="row-rtune"><span class="lbl tip" title="Red tune — nudges the automatic white balance toward more red (+) or less red (−). Works in Auto, One push and Color temp modes.">Red tune</span><input id="rtune" type="range" min="-10" max="10" step="1" value="0"><b id="rtuneV" class="exv">—</b></div>
+      <div class="per" id="per-rtune"></div>
+      <div class="slr" id="row-btune"><span class="lbl tip" title="Blue tune — nudges the automatic white balance toward more blue (+) or less blue (−). Works in Auto, One push and Color temp modes.">Blue tune</span><input id="btune" type="range" min="-10" max="10" step="1" value="0"><b id="btuneV" class="exv">—</b></div>
+      <div class="per" id="per-btune"></div>
+
+      <div class="sr" id="row-ctemp"><span class="lbl tip" title="Color temperature — the light color the camera should treat as white, in Kelvin. Lower (about 3200K) suits warm indoor lighting, higher (about 5600–6500K) suits daylight. Color temp mode only.">Temp</span>
+        <select id="ctempSel"></select></div>
+      <div class="per" id="per-ctemp"></div>
+
+      <div class="row" id="row-onepush"><button id="onePush" title="Measures the scene once and sets white balance from it. Point the camera at something white or neutral in your lighting first. Takes up to about 15 seconds. One push mode only.">One-push calibrate</button></div>
+      <p class="hint" id="wbHint"></p>
+
+      <div class="drawerFoot"><button class="secondary" id="copyColor" title="Copy white balance mode and its settings from this camera to the other cameras">Copy to other cameras</button></div>
+    </aside>
+
+    <aside class="drawer closed" id="drawer-tracking" data-title="Tracking" data-accent="track" data-noscope aria-hidden="true">
+      <p class="hint noall">Selected camera only. Tracking is never sent to all cameras.</p>
+      <h3>Automation</h3>
+      <div class="seg" id="trkSeg">
+        <button data-mode="off">Off</button><button data-mode="tracking">Auto tracking</button><button data-mode="autoframe">Auto framing</button>
+      </div>
+      <div class="per" id="per-trkmode"></div>
+      <p class="hint" id="trkHint"></p>
+
+      <h3>Start &amp; stop</h3>
+      <div class="loc"><span class="lbl tip" title="Where the camera goes when tracking starts. Track Now starts from where it is. Home goes home first. Preset goes to one of your saved presets first (a spot aimed where your speaker usually stands is a good choice).">Start at</span>
+        <select id="trkStartSel"><option value="now">Track Now</option><option value="home">Home</option><option value="preset">Preset…</option></select><input id="trkStartNum" type="number" min="0" max="254" placeholder="0-254"></div>
+      <div class="loc"><span class="lbl tip" title="Where the camera goes when tracking is turned off. Track Now stays where it is. Home goes home. Preset goes to one of your saved presets.">Stop at</span>
+        <select id="trkStopSel"><option value="now">Track Now</option><option value="home">Home</option><option value="preset">Preset…</option></select><input id="trkStopNum" type="number" min="0" max="254" placeholder="0-254"></div>
+      <div class="slr"><span class="lbl tip" title="How long the camera waits after tracking is turned on before it starts to track (1 to 60 seconds). The camera doesn't allow less than 1 second.">Delay</span><input id="trkDelay" type="range" min="1" max="60" step="1" value="1"><b id="trkDelayV" class="exv">—</b></div>
+
+      <h3>When the target is lost</h3>
+      <div class="slr"><span class="lbl tip" title="How long the camera waits after losing the person it is following before it takes the lost-target action (6 to 60 seconds). A short wait covers someone briefly stepping out of view.">Wait</span><input id="trkLossTime" type="range" min="6" max="60" step="1" value="6"><b id="trkLossTimeV" class="exv">—</b></div>
+      <div class="loc"><span class="lbl tip" title="What the camera does after the wait. Track Now stays put and keeps looking. Home goes home. Preset goes to a saved preset, for example one aimed at the podium, zoomed out enough to show face and body.">Then go to</span>
+        <select id="trkLossSel"><option value="now">Track Now</option><option value="home">Home</option><option value="preset">Preset…</option></select><input id="trkLossNum" type="number" min="0" max="254" placeholder="0-254"></div>
+
+      <h3>Display</h3>
+      <label class="ispRow" title="Draws the camera's tracking overlay on its own video output. Doesn't change how it tracks."><input type="checkbox" id="trkOverlay"><span>Tracking overlay on the camera's video</span></label>
+
+      <p class="hint">To steer who it follows: save a preset where your speaker usually stands (zoomed out for face and body), then use it for "Start at" and "Then go to" with a wait of about 3–6 s. The camera picks the person itself; this model has no target-selection control.</p>
+    </aside>
+  </div>
+
+  <aside id="panel">
+    <header><h2 id="selName">—</h2><button id="settingsBtn" title="Settings">⚙</button></header>
+    <div id="drawerBtns"></div>
+
+    <div id="panelBody">
+      <div class="row">
+        <span class="lbl">Protocol</span>
+        <label><input type="radio" name="proto" value="http" checked> HTTP</label>
+        <label><input type="radio" name="proto" value="visca"> VISCA</label>
+      </div>
+      <div class="row"><span class="lbl">Speed</span>
+        <input id="speed" type="range" min="1" max="20" value="8"><b id="speedVal">8</b></div>
+
+      <div class="pad">
+        <button data-d="upleft">↖</button><button data-d="up">▲</button><button data-d="upright">↗</button>
+        <button data-d="left">◀</button><button data-d="home" class="home">⌂</button><button data-d="right">▶</button>
+        <button data-d="downleft">↙</button><button data-d="down">▼</button><button data-d="downright">↘</button>
+      </div>
+
+      <div class="row"><span class="lbl">Zoom</span><button data-z="out">−</button><button data-z="in">+</button></div>
+      <div class="row"><span class="lbl">Focus</span><button data-f="out">near</button><button data-f="in">far</button>
+        <button id="afLock" title="Freeze current focus (stops AF hunting)">🔓 Lock</button></div>
+      <div class="row"><span class="lbl">AF mode</span><button id="afAuto">Auto</button><button id="afManual">Manual</button><button id="afPush">One-push</button></div>
+
+      <div class="row"><span class="lbl">Tracking</span><span class="seg mini" id="trkQuick" title="Selected camera only">
+        <button data-mode="off">Off</button><button data-mode="tracking">Track</button><button data-mode="autoframe">Frame</button></span></div>
+
+      <div id="readout"><span>Pan <b id="rPan">—</b></span><span>Tilt <b id="rTilt">—</b></span><span>Zoom <b id="rZoom">—</b></span></div>
+
+      <details id="presetsBox" open><summary>Presets <small>(shift-click or long-press = save)</small></summary>
+        <div id="presets"></div>
+        <div class="ispWrap">
+          <label class="ispRow" title="Off (recommended): recalling a preset moves pan, tilt, zoom and focus only. On: it also applies the color and exposure settings that were saved with the preset. Applies to all cameras."><input type="checkbox" id="ispChk"><span>Recall color &amp; exposure with presets</span></label>
+          <div class="per" id="per-isp"></div>
+          <p class="hint ispHint">Off = presets move the camera only. All four cameras are changed together.</p>
+        </div>
+      </details>
+    </div>
+
+    <footer id="footer"><span id="status">Ready</span>
+      <span class="tip" title="Keys: 1–4 select camera · arrows move · + / − zoom · space stop · H home">⌨ keys</span></footer>
+  </aside>
+</div>
+<div id="dlg" hidden><div class="box">
+  <h3>Settings</h3><div id="camFields"></div>
+  <div class="row"><button id="saveCfg">Save</button><button id="cancelCfg">Cancel</button></div>
+</div></div>
+<script src="renderer.js"></script>
+</body></html>
