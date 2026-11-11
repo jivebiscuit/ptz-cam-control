@@ -6,11 +6,15 @@
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win portable --x64",
-    "dist:mac": "electron-builder --mac dir"
+    "dist:mac": "electron-builder --mac dir",
+    "lint": "eslint . --max-warnings 0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0"
   },
   "build": {
     "appId": "com.soth.camcontrol",

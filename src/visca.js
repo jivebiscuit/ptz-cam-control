@@ -100,8 +100,8 @@ const DIR = {
 
 const cmds = {
   panTilt(dir, vv, ww) { return `81 01 06 01 ${hx(vv)} ${hx(ww)} ${DIR[dir]} ff`; },
+  // panTiltAbs / zoomDirect are not wired to the UI; kept as diagnostic helpers (used by test scripts)
   panTiltAbs(vv, ww, pan, tilt) { return `81 01 06 02 ${hx(vv)} ${hx(ww)} ${nib(pan & 0xffff)} ${nib(tilt & 0xffff)} ff`; },
-  panTiltRel(vv, ww, dp, dt) { return `81 01 06 03 ${hx(vv)} ${hx(ww)} ${nib(dp & 0xffff)} ${nib(dt & 0xffff)} ff`; },
   home: '81 01 06 04 ff',
   zoomStop: '81 01 04 07 00 ff',
   zoomTele(p) { return `81 01 04 07 2${p & 7} ff`; },
@@ -119,11 +119,10 @@ const cmds = {
   presetRecall(n) { return `81 01 04 3f 02 ${hx(n)} ff`; },
   panTiltInq: '81 09 06 12 ff',
   zoomInq: '81 09 04 47 ff',
-  focusInq: '81 09 04 48 ff',
 };
 
 // Exposure (standard VISCA; the PTZOptics doc page has copy/paste errors in the shutter/gain rows)
-const AE_MODES = { 0x00: 'Auto', 0x03: 'Manual', 0x0a: 'Shutter priority', 0x0b: 'Iris priority', 0x0d: 'Bright' };
+// Exposure builders (the live exposure readout itself comes from the camera's HTTP state, not VISCA inquiries)
 Object.assign(cmds, {
   flicker(p) { return `81 01 04 23 0${p & 15} ff`; }, // 0 off, 1 50Hz, 2 60Hz
   aeMode(m) { return `81 01 04 39 ${hx(m)} ff`; },
@@ -134,20 +133,10 @@ Object.assign(cmds, {
   gainUp: '81 01 04 0c 02 ff', gainDown: '81 01 04 0c 03 ff',
   gainDirect(v) { return `81 01 04 4c 00 00 0${(v >> 4) & 15} 0${v & 15} ff`; },
 });
-const pq = (b) => ((b[4] & 15) << 4) | (b[5] & 15);
-async function getExposure(c) {
-  const ae = await c.inquire('81 09 04 39 ff', 1200, 4);
-  const iris = await c.inquire('81 09 04 4b ff', 1200, 7);
-  const shutter = await c.inquire('81 09 04 4a ff', 1200, 7);
-  const gain = await c.inquire('81 09 04 4c ff', 1200, 7);
-  const gl = await c.inquire('81 09 04 2c ff', 1200, 4);
-  return { gainLimit: gl[2] & 15, ae: ae[2], aeName: AE_MODES[ae[2]] || '0x' + ae[2].toString(16), iris: pq(iris), shutter: pq(shutter), gain: pq(gain) };
-}
-
 async function getPosition(c) {
   const pt = await c.inquire(cmds.panTiltInq, 1200, 11);
   const z = await c.inquire(cmds.zoomInq, 1200, 7);
   return { pan: s16(unnib(pt, 2)), tilt: s16(unnib(pt, 6)), zoom: unnib(z, 2) };
 }
 
-module.exports = { ViscaClient, cmds, getPosition, getExposure };
+module.exports = { ViscaClient, cmds, getPosition };

@@ -2,11 +2,13 @@ const $ = (s) => document.querySelector(s);
 let cfg, sel = 0, tileEls = [];
 const state = { proto: 'http', locked: {} }; // locked[camIndex] — camera can't report lock state, so we track it
 
-const status = (m, err) => { const s = $('#status'); s.textContent = m; s.title = m; s.className = err ? 'err' : ''; };
+const setStatus = (m, err) => { const s = $('#status'); s.textContent = m; s.title = m; s.className = err ? 'err' : ''; };
 // don't leave a clicked button focused (it would show a focus ring and react to Space/Enter)
 document.addEventListener('mouseup', (e) => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
+// dropdowns, sliders, checkboxes and radios give up keyboard focus once you've used them, so the shortcuts work again
+document.addEventListener('change', (e) => { const t = e.target; if (t && t.matches && t.matches('select, input[type=range], input[type=checkbox], input[type=radio]')) t.blur(); }, true);
 const cam = (a, forceVisca) => (forceVisca || state.proto === 'visca' ? window.api.visca(sel, a) : window.api.http(sel, a))
-  .then((r) => { if (!r.ok) status(`${cfg.cameras[sel].name}: ${r.error}`, true); return r; });
+  .then((r) => { if (!r.ok) setStatus(`${cfg.cameras[sel].name}: ${r.error}`, true); return r; });
 
 // ---- multiview: live MJPEG from local ffmpeg-backed stream server ----
 let streamPort = 0;
@@ -47,7 +49,9 @@ function select(i) {
   tileEls.forEach((t, k) => t.classList.toggle('sel', k === i));
   renderLock();
   $('#selName').textContent = `${i + 1} · ${cfg.cameras[i].name}`;
-  status('Ready');
+  document.querySelectorAll('.dCam').forEach((el) => (el.textContent = `${i + 1} · ${cfg.cameras[i].name}`)); // drawer headers
+  pollAdv(); // refresh the drawers' values for the newly selected camera
+  setStatus('Ready');
 }
 
 // ---- PTZ ----
@@ -55,7 +59,7 @@ const speed = () => +$('#speed').value;
 // HTTP pan 1-24, tilt 1-20 ; slider 1-20 maps directly
 const panSp = () => Math.min(24, Math.round(speed() * 1.2)), tiltSp = () => speed();
 const move = (dir) => cam({ type: 'move', dir, pan: panSp(), tilt: tiltSp() });
-const stop = () => cam({ type: 'move', dir: 'stop', pan: 1, tilt: 1 });
+const stopMove = () => cam({ type: 'move', dir: 'stop', pan: 1, tilt: 1 });
 const zoomSp = () => Math.max(1, Math.min(7, Math.round(speed() / 3)));
 const focusSp = () => Math.max(1, Math.min(7, Math.round(speed() / 3)));
 
@@ -69,7 +73,7 @@ function initControls() {
   document.querySelectorAll('.pad button').forEach((b) => {
     const d = b.dataset.d;
     if (d === 'home') b.onclick = () => cam({ type: 'home' });
-    else hold(b, () => move(d), stop);
+    else hold(b, () => move(d), stopMove);
   });
   document.querySelectorAll('[data-z]').forEach((b) => hold(b,
     () => cam({ type: 'zoom', dir: b.dataset.z, speed: zoomSp() }), () => cam({ type: 'zoom', dir: 'stop' })));
@@ -80,8 +84,8 @@ function initControls() {
   $('#afLock').onclick = async () => {
     const i = sel, on = !state.locked[i];
     const r = await window.api.visca(i, { type: 'focusLock', on });
-    if (!r.ok) return status(`${cfg.cameras[i].name}: ${r.error}`, true);
-    state.locked[i] = on; renderLock(); status(`${cfg.cameras[i].name}: focus ${on ? 'LOCKED' : 'unlocked'}`); setTimeout(pollAdv, 500);
+    if (!r.ok) return setStatus(`${cfg.cameras[i].name}: ${r.error}`, true);
+    state.locked[i] = on; renderLock(); setStatus(`${cfg.cameras[i].name}: focus ${on ? 'LOCKED' : 'unlocked'}`); setTimeout(pollAdv, 500);
   };
   $('#afPush').onclick = () => cam({ type: 'focusOnePush' }, true);
   $('#speed').oninput = () => ($('#speedVal').textContent = speed());
@@ -91,30 +95,40 @@ function initControls() {
   const P = $('#presets');
   for (let n = 0; n < 10; n++) {
     const b = document.createElement('button'); b.textContent = n; let timer, longed = false;
-    const save = () => { cam({ type: 'presetSet', n }); status(`Saved preset ${n} on ${cfg.cameras[sel].name}`); };
+    const save = () => { cam({ type: 'presetSet', n }); setStatus(`Saved preset ${n} on ${cfg.cameras[sel].name}`); };
     b.onmousedown = () => { longed = false; timer = setTimeout(() => { longed = true; save(); }, 800); };
     b.onmouseup = () => clearTimeout(timer);
     b.onclick = (e) => { if (longed) return; if (e.shiftKey) save(); else cam({ type: 'presetRecall', n }); };
     P.appendChild(b);
   }
 
-  // keyboard
+  // keyboard: 1-4 select a camera, arrows move, +/- zoom, space stop, H home.
+  // Shortcuts only run when you are NOT typing or using a form control, with no Ctrl/Cmd/Alt held, and with the
+  // Settings dialog closed; otherwise e.g. typing "North" in a name box would send Home to a camera.
   const keys = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
-  const heldKeys = new Set();
+  // '+'/'=' and '-'/'_' are the same physical keys, so a key can be released as the other character if Shift is let go first
+  const actionOf = (k) => (keys[k] ? k : k === '+' || k === '=' ? 'zoomin' : k === '-' || k === '_' ? 'zoomout' : null);
+  const heldKeys = new Set(); // only actions WE started: their release (or the window losing focus) sends the matching stop
+  const inForm = (el) => !!el && (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.isContentEditable);
+  const stopHeld = () => { if (!heldKeys.size) return; const moved = [...heldKeys].some((k) => keys[k]), zoomed = heldKeys.has('zoomin') || heldKeys.has('zoomout'); heldKeys.clear(); if (moved) stopMove(); if (zoomed) cam({ type: 'zoom', dir: 'stop' }); };
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' && e.target.type === 'number') return;
-    if (e.repeat) return;
+    if (e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (inForm(e.target) || !$('#dlg').hidden) return;
+    const act = actionOf(e.key);
     if (/^[1-4]$/.test(e.key) && cfg.cameras[+e.key - 1]) return select(+e.key - 1);
     if (keys[e.key]) { e.preventDefault(); heldKeys.add(e.key); move(keys[e.key]); }
-    else if (e.key === '+' || e.key === '=') cam({ type: 'zoom', dir: 'in', speed: zoomSp() });
-    else if (e.key === '-') cam({ type: 'zoom', dir: 'out', speed: zoomSp() });
-    else if (e.key === ' ') { e.preventDefault(); stop(); }
+    else if (act === 'zoomin') { heldKeys.add(act); cam({ type: 'zoom', dir: 'in', speed: zoomSp() }); }
+    else if (act === 'zoomout') { heldKeys.add(act); cam({ type: 'zoom', dir: 'out', speed: zoomSp() }); }
+    else if (e.key === ' ') { e.preventDefault(); stopMove(); }
     else if (e.key.toLowerCase() === 'h') cam({ type: 'home' });
   });
   window.addEventListener('keyup', (e) => {
-    if (keys[e.key]) { heldKeys.delete(e.key); stop(); }
-    else if (['+', '=', '-'].includes(e.key)) cam({ type: 'zoom', dir: 'stop' });
+    const act = actionOf(e.key);
+    if (!act || !heldKeys.has(act)) return;
+    heldKeys.delete(act);
+    if (keys[act]) stopMove(); else cam({ type: 'zoom', dir: 'stop' });
   });
+  window.addEventListener('blur', stopHeld); // e.g. Cmd-Tab while holding an arrow: the key-up would never arrive
 }
 
 // ---- settings ----
@@ -189,14 +203,12 @@ setInterval(pollPositions, 500);
 
 // ---- exposure (selected camera only, once a second) ----
 // Raw VISCA step indexes: the docs give no F-number/shutter/gain tables. Iris 17 (0x11) is the widest on these cameras.
-const IRIS_MAX = 17;
 // F-stop per iris step, from the camera's web UI list (F1.8 = step 17 confirmed by test; steps below counted down in order, F11 = 6, 0 = Close; 1-5 not offered by the web UI).
 const IRIS_F = { 17: 'F1.8', 16: 'F2.0', 15: 'F2.4', 14: 'F2.8', 13: 'F3.4', 12: 'F4.0', 11: 'F4.8', 10: 'F5.6', 9: 'F6.8', 8: 'F8.0', 7: 'F9.6', 6: 'F11', 0: 'Close' };
 // Shutter per step, from the camera's web UI list. 1/30 = step 1 confirmed (current camera value); rest counted up in order.
 const SHUTTER = ['1/30','1/50','1/60','1/100','1/125','1/200','1/250','1/350','1/500','1/725','1/1000','1/1500','1/2000','1/3000','1/4000','1/6000','1/10000'];
 const shutterLabel = (v) => SHUTTER[v - 1] || `step ${v}`;
 const irisLabel = (v) => IRIS_F[v] || `step ${v}`;
-let exposure = null;
 const EX_HINT = { 0: 'Auto: camera controls everything.', 3: 'Manual: iris, shutter and gain all adjustable.', 10: 'Shutter priority: shutter adjustable; iris/gain are automatic.', 11: 'Iris priority: iris adjustable; shutter/gain are automatic.', 13: 'Bright: auto with brightness bias.' };
 const lastExp = [];
 const AE_SHORT = { 0: 'Auto', 3: 'Manual', 10: 'S-Pri', 11: 'I-Pri', 13: 'Bright' };
@@ -215,7 +227,6 @@ function renderExposure() {
     el.textContent = e ? `${irisLabel(e.iris)}  ${shutterLabel(e.shutter)}  gain ${e.gain} (max ${e.gainLimit})  ${AE_SHORT[e.ae] || e.aeName}` : '';
   });
   const e = lastExp[sel];
-  exposure = e;
   $('#exIris').textContent = e ? irisLabel(e.iris) : '—';
   if (e && document.activeElement !== $('#irisSel')) $('#irisSel').value = IRIS_F[e.iris] ? e.iris : '';
   $('#exShutter').textContent = e ? shutterLabel(e.shutter) : '—';
@@ -258,7 +269,7 @@ const targets = () => (scopeAll() ? cfg.cameras.map((_, i) => i) : [sel]);
 async function sendAll(a) {
   const rs = await Promise.all(targets().map((i) => window.api.visca(i, a)));
   const bad = rs.map((r, k) => (r.ok ? null : `${cfg.cameras[targets()[k]].name}: ${r.error}`)).filter(Boolean);
-  if (bad.length) status(bad.join(' · '), true);
+  if (bad.length) setStatus(bad.join(' · '), true);
   return rs;
 }
 // same, for the HTTP image settings (meter / gainLimit / drc)
@@ -266,7 +277,7 @@ async function setImage(name, value) {
   const rs = await Promise.all(targets().map((i) => window.api.http(i, { type: 'image', name, value })));
   const bad = rs.map((r, k) => (r.ok ? null : `${cfg.cameras[targets()[k]].name}: ${r.error}`)).filter(Boolean);
   setTimeout(pollAdv, 400);
-  status(bad.length ? bad.join(' · ') : `${name} = ${value} → ${scopeAll() ? 'all cameras' : cfg.cameras[sel].name}`, !!bad.length);
+  setStatus(bad.length ? bad.join(' · ') : `${name} = ${value} → ${scopeAll() ? 'all cameras' : cfg.cameras[sel].name}`, !!bad.length);
 }
 // ---- drawers: generic. Each <aside class="drawer" data-title> gets a button, header and "apply to all" switch. ----
 const drawers = [...document.querySelectorAll('.drawer')];
@@ -294,21 +305,19 @@ drawers.forEach((d) => {
   $('#drawerBtns').appendChild(b);
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') openDrawer(null); });
-const origSelect = select;
-select = function (i) { origSelect(i); document.querySelectorAll('.dCam').forEach((el) => (el.textContent = `${i + 1} · ${cfg.cameras[i].name}`)); pollAdv(); };
 $('#meterSel').onchange = () => { const v = $('#meterSel').value; if (v !== '') setImage('meter', v); };
 $('#gainLim').oninput = () => ($('#gainLimV').textContent = $('#gainLim').value);
 $('#gainLim').onchange = () => setImage('gainLimit', $('#gainLim').value);
 $('#drc').oninput = () => ($('#drcV').textContent = $('#drc').value);
 $('#drc').onchange = () => setImage('drc', $('#drc').value);
-$('#flickerSel').onchange = async () => { const v = $('#flickerSel').value; if (v === '') return; const rs = await sendAll({ type: 'flicker', value: +v }); if (rs.every((r) => r.ok)) status('anti-flicker set'); setTimeout(pollAdv, 400); };
+$('#flickerSel').onchange = async () => { const v = $('#flickerSel').value; if (v === '') return; const rs = await sendAll({ type: 'flicker', value: +v }); if (rs.every((r) => r.ok)) setStatus('anti-flicker set'); setTimeout(pollAdv, 400); };
 
 // ---- copy selected camera's exposure settings to the other cameras ----
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function refreshExp() { await refreshAdv(); }
 $('#copyAll').onclick = async () => {
   const src = sel, e = lastExp[src];
-  if (!e) return status(`${cfg.cameras[src].name}: no exposure data yet`, true);
+  if (!e) return setStatus(`${cfg.cameras[src].name}: no exposure data yet`, true);
   const others = cfg.cameras.map((_, i) => i).filter((i) => i !== src);
   const manual = e.ae === 3;
   const fields = ['ae', ...(manual || e.ae === 10 ? ['shutter'] : []), ...(manual || e.ae === 11 ? ['iris'] : []), ...(manual ? ['gain'] : []), 'gainLimit'];
@@ -335,24 +344,24 @@ $('#copyAll').onclick = async () => {
     await refreshExp();
     const modeChange = others.some((i) => !lastExp[i] || lastExp[i].ae !== e.ae);
     if (modeChange) {
-      status('Copying… switching exposure mode');
+      setStatus('Copying… switching exposure mode');
       await Promise.all(others.map((i) => sendField(i, 'ae')));
       for (let k = 0; k < 12; k++) { await sleep(500); await refreshExp(); if (!wrong().some((m) => m.fs.includes('ae'))) break; }
-      status('Copying… waiting for the cameras to settle'); await sleep(4000);
+      setStatus('Copying… waiting for the cameras to settle'); await sleep(4000);
     }
     // 2) the remaining values, then verify and retry only what didn't take (up to 2 retries)
     const rest = fields.filter((f) => f !== 'ae');
-    status('Copying… sending values');
+    setStatus('Copying… sending values');
     await Promise.all(others.map(async (i) => { for (const f of rest) await sendField(i, f); }));
     await sleep(1500); await refreshExp();
     let bad = wrong();
     for (let attempt = 1; bad.length && attempt <= 2; attempt++) {
-      status(`Copying… retrying ${bad.map((m) => cfg.cameras[m.i].name).join(', ')} (${attempt}/2)`);
+      setStatus(`Copying… retrying ${bad.map((m) => cfg.cameras[m.i].name).join(', ')} (${attempt}/2)`);
       await Promise.all(bad.map(async (m) => { for (const f of m.fs) await sendField(m.i, f); }));
       await sleep(2500); await refreshExp(); bad = wrong();
     }
-    if (bad.length) status(`Copied, but still different → ${bad.map((m) => `${cfg.cameras[m.i].name}: ${m.none ? 'no reply' : m.fs.join(', ')}`).join(' · ')}`, true);
-    else status(`Copied from ${cfg.cameras[src].name} to ${names} ✔ (verified)`);
+    if (bad.length) setStatus(`Copied, but still different → ${bad.map((m) => `${cfg.cameras[m.i].name}: ${m.none ? 'no reply' : m.fs.join(', ')}`).join(' · ')}`, true);
+    else setStatus(`Copied from ${cfg.cameras[src].name} to ${names} ✔ (verified)`);
   } finally { copyBtn.disabled = false; }
 };
 
@@ -388,9 +397,9 @@ function renderImg() {
     if (mine != null && document.activeElement !== r) { r.value = mine; d.querySelector('.val').textContent = c.fmt(mine); }
     // short camera tag: first letter of its name if unique, else its number
     const tag = (i) => { const n = cfg.cameras[i].name.trim(); const ch = n[0] ? n[0].toUpperCase() : ''; return ch && cfg.cameras.filter((x) => (x.name.trim()[0] || '').toUpperCase() === ch).length === 1 ? ch : String(i + 1); };
-    d.querySelector('.per').innerHTML = cfg.cameras.map((cam, i) => {
+    d.querySelector('.per').innerHTML = cfg.cameras.map((camera, i) => {
       const v = lastImg[i] ? lastImg[i][c.key] : null;
-      return `<span title="${cam.name}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${tag(i)} ${v == null ? '—' : c.fmt(v)}</span>`;
+      return `<span title="${camera.name}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${tag(i)} ${v == null ? '—' : c.fmt(v)}</span>`;
     }).join('');
   });
 }
@@ -402,7 +411,7 @@ setInterval(pollImage, 2000);
 document.querySelectorAll('#drawerBtns button').forEach((b) => b.addEventListener('click', () => setTimeout(pollImage, 50)));
 $('#copyImage').onclick = async () => {
   const src = sel, e = lastImg[src];
-  if (!e) return status(`${cfg.cameras[src].name}: no image data yet`, true);
+  if (!e) return setStatus(`${cfg.cameras[src].name}: no image data yet`, true);
   const others = cfg.cameras.map((_, i) => i).filter((i) => i !== src), names = others.map((i) => cfg.cameras[i].name).join(', ');
   const plan = IMG.map((c) => `${c.label}: ${c.fmt(e[c.key])}`).join('\n');
   if (!confirm(`Copy image settings from ${cfg.cameras[src].name} to ${names}?\n\n${plan}`)) return;
@@ -410,7 +419,7 @@ $('#copyImage').onclick = async () => {
   try {
     const send = (i, keys) => Promise.all(keys.map((c) => window.api.http(i, { type: 'image', name: c.name, value: e[c.key] })));
     const wrongImg = () => others.map((i) => ({ i, cs: lastImg[i] ? IMG.filter((c) => lastImg[i][c.key] !== e[c.key]) : IMG.slice(), none: !lastImg[i] })).filter((m) => m.cs.length);
-    status('Copying image settings…');
+    setStatus('Copying image settings…');
     await Promise.all(others.map((i) => send(i, IMG)));
     await sleep(800); await pollImage();
     let bad = wrongImg();
@@ -418,22 +427,22 @@ $('#copyImage').onclick = async () => {
       await Promise.all(bad.map((m) => send(m.i, m.cs)));
       await sleep(1000); await pollImage(); bad = wrongImg();
     }
-    if (bad.length) status(`Copied, but still different → ${bad.map((m) => `${cfg.cameras[m.i].name}: ${m.none ? 'no reply' : m.cs.map((c) => c.label).join(', ')}`).join(' · ')}`, true);
-    else status(`Image settings copied from ${cfg.cameras[src].name} ✔ (verified)`);
+    if (bad.length) setStatus(`Copied, but still different → ${bad.map((m) => `${cfg.cameras[m.i].name}: ${m.none ? 'no reply' : m.cs.map((c) => c.label).join(', ')}`).join(' · ')}`, true);
+    else setStatus(`Image settings copied from ${cfg.cameras[src].name} ✔ (verified)`);
   } finally { btn.disabled = false; }
 };
 
 // ---- live readback of everything the cameras report over HTTP (meter, DRC, flicker, gain limit, focus lock) ----
-const METER = ['Average', 'Center', 'Smart', 'Top'], METER_S = ['Avg', 'Ctr', 'Smt', 'Top'], FLICK = ['Off', '50 Hz', '60 Hz'];
+const METER_S = ['Avg', 'Ctr', 'Smt', 'Top'], FLICK = ['Off', '50 Hz', '60 Hz'];
 const lastAdv = [];
 const advBusyArr = [], advT = [];
 const advBusyAny = () => advBusyArr.some(Boolean);
 const camTag = (i) => { const n = cfg.cameras[i].name.trim(); const ch = n[0] ? n[0].toUpperCase() : ''; return ch && cfg.cameras.filter((x) => (x.name.trim()[0] || '').toUpperCase() === ch).length === 1 ? ch : String(i + 1); };
 function perLine(id, get, fmt) {
   const mine = lastAdv[sel] ? get(lastAdv[sel]) : null;
-  $('#' + id).innerHTML = cfg.cameras.map((cam, i) => {
+  $('#' + id).innerHTML = cfg.cameras.map((camera, i) => {
     const v = lastAdv[i] ? get(lastAdv[i]) : null;
-    return `<span title="${cam.name}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${camTag(i)} ${v == null ? '—' : fmt(v)}</span>`;
+    return `<span title="${camera.name}" class="${v != null && mine != null && v !== mine ? 'diff' : ''}">${camTag(i)} ${v == null ? '—' : fmt(v)}</span>`;
   }).join('');
 }
 // Tile captions no longer list meter/DRC/flicker or image settings; instead an orange badge shows up only when a
@@ -524,7 +533,7 @@ $('#wbMode').onchange = () => { setImage('wbmode', $('#wbMode').value); setTimeo
 $('#ctempSel').onchange = () => { setImage('colortemp', $('#ctempSel').value); setTimeout(pollAdv, 500); };
 $('#onePush').onclick = async () => {
   await setImage('onepush', 0);
-  status('One-push white balance: calculating (up to ~15 s)…');
+  setStatus('One-push white balance: calculating (up to ~15 s)…');
   setTimeout(pollAdv, 4000); setTimeout(pollAdv, 16000);
 };
 const WB_HINT = { 0: 'Auto: the camera adjusts continuously. Red/Blue tune nudge it.', 1: 'Indoor preset.', 2: 'Outdoor preset.', 3: 'One push: aim at something white, then press One-push calibrate.', 5: 'Manual: red and blue gain are fixed by hand (steady, but won\'t follow changing light).', 32: 'Color temp: choose the light color to treat as white.' };
@@ -549,7 +558,7 @@ function renderColor() {
 async function refreshAdv() { while (advBusyAny()) await sleep(100); await pollAdv(); }
 $('#copyColor').onclick = async () => {
   const src = sel, x = lastAdv[src];
-  if (!x) return status(`${cfg.cameras[src].name}: no color data yet`, true);
+  if (!x) return setStatus(`${cfg.cameras[src].name}: no color data yet`, true);
   const mode = +x.wb_mode, others = cfg.cameras.map((_, i) => i).filter((i) => i !== src);
   const names = others.map((i) => cfg.cameras[i].name).join(', ');
   // which values matter for this mode
@@ -565,22 +574,22 @@ $('#copyColor').onclick = async () => {
     await refreshAdv();
     const modeChange = others.some((i) => !lastAdv[i] || +lastAdv[i].wb_mode !== mode);
     if (modeChange) {
-      status('Copying… switching white balance mode');
+      setStatus('Copying… switching white balance mode');
       await Promise.all(others.map((i) => send(i, items[0])));
       for (let k = 0; k < 10; k++) { await sleep(500); await refreshAdv(); if (!wrong().some((m) => m.its.includes(items[0]))) break; }
-      status('Copying… waiting for the cameras to settle'); await sleep(2500);
+      setStatus('Copying… waiting for the cameras to settle'); await sleep(2500);
     }
-    status('Copying… sending values');
+    setStatus('Copying… sending values');
     await Promise.all(others.map(async (i) => { for (const it of items.slice(1)) await send(i, it); }));
     await sleep(1200); await refreshAdv();
     let bad = wrong();
     for (let attempt = 1; bad.length && attempt <= 2; attempt++) {
-      status(`Copying… retrying ${bad.map((m) => cfg.cameras[m.i].name).join(', ')} (${attempt}/2)`);
+      setStatus(`Copying… retrying ${bad.map((m) => cfg.cameras[m.i].name).join(', ')} (${attempt}/2)`);
       await Promise.all(bad.map(async (m) => { for (const it of m.its) await send(m.i, it); }));
       await sleep(2000); await refreshAdv(); bad = wrong();
     }
-    if (bad.length) status(`Copied, but still different → ${bad.map((m) => `${cfg.cameras[m.i].name}: ${m.none ? 'no reply' : m.its.map((it) => it.label.split(':')[0]).join(', ')}`).join(' · ')}`, true);
-    else status(`White balance copied from ${cfg.cameras[src].name} ✔ (verified)`);
+    if (bad.length) setStatus(`Copied, but still different → ${bad.map((m) => `${cfg.cameras[m.i].name}: ${m.none ? 'no reply' : m.its.map((it) => it.label.split(':')[0]).join(', ')}`).join(' · ')}`, true);
+    else setStatus(`White balance copied from ${cfg.cameras[src].name} ✔ (verified)`);
   } finally { btn.disabled = false; }
 };
 
@@ -608,7 +617,7 @@ function renderIsp() {
   const chk = $('#ispChk');
   chk.checked = known.length > 0 && known.every((v) => v === 1);
   chk.indeterminate = known.length > 0 && known.some((v) => v === 1) && known.some((v) => v === 0);
-  $('#per-isp').innerHTML = cfg.cameras.map((cam, i) => `<span title="${cam.name}" class="${vals[i] === 1 ? 'diff' : ''}">${camTag(i)} ${vals[i] === null ? '—' : vals[i] ? 'ON' : 'off'}</span>`).join('');
+  $('#per-isp').innerHTML = cfg.cameras.map((camera, i) => `<span title="${camera.name}" class="${vals[i] === 1 ? 'diff' : ''}">${camTag(i)} ${vals[i] === null ? '—' : vals[i] ? 'ON' : 'off'}</span>`).join('');
   tileEls.forEach((t, i) => {
     const el = t.querySelector('.pimg'); if (!el) return;
     el.textContent = vals[i] === 1 ? 'PRESET IMG' : '';
@@ -625,7 +634,7 @@ $('#ispChk').onchange = async () => {
   if (on && !confirm('Turn ON for all cameras?\n\nRecalling a preset will then also change that camera\'s color and exposure to what was saved with the preset.')) { renderIsp(); return; }
   const rs = await Promise.all(cfg.cameras.map((_, i) => window.api.http(i, { type: 'presetImgSet', on })));
   const bad = rs.map((r, i) => (r.ok ? null : cfg.cameras[i].name)).filter(Boolean);
-  status(bad.length ? `Preset image setting failed on: ${bad.join(', ')}` : `Presets ${on ? 'also recall image settings' : 'recall pan/tilt/zoom/focus only'} (all cameras)`, !!bad.length);
+  setStatus(bad.length ? `Preset image setting failed on: ${bad.join(', ')}` : `Presets ${on ? 'also recall image settings' : 'recall pan/tilt/zoom/focus only'} (all cameras)`, !!bad.length);
   setTimeout(pollIsp, 800);
 };
 setInterval(pollIsp, 5000);
@@ -638,8 +647,8 @@ const TRK_NAMES = { off: 'Off', tracking: 'Tracking', autoframe: 'Framing' };
 async function trackSet(body) {
   const i = sel;                                   // always exactly the selected camera
   const r = await window.api.http(i, { type: 'trackSet', body });
-  if (!r.ok) status(`${cfg.cameras[i].name}: tracking change failed (${r.error})`, true);
-  else status(`${cfg.cameras[i].name}: ${Object.entries(body).map(([k, v]) => `${k} = ${v}`).join(', ')}`);
+  if (!r.ok) setStatus(`${cfg.cameras[i].name}: tracking change failed (${r.error})`, true);
+  else setStatus(`${cfg.cameras[i].name}: ${Object.entries(body).map(([k, v]) => `${k} = ${v}`).join(', ')}`);
   setTimeout(pollTrack, 300);
   return r;
 }

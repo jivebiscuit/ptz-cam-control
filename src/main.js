@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { ViscaClient, cmds, getPosition, getExposure } = require('./visca');
+const { ViscaClient, cmds, getPosition } = require('./visca');
 const { StreamServer } = require('./streams');
 const streams = new StreamServer();
 
@@ -14,12 +14,11 @@ const DEFAULTS = {
     { name: 'Rear', ip: '192.168.0.203' },
   ],
   viscaPort: 5678,
-  snapshotFps: 5,
 };
 
 const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
-  try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgPath(), 'utf8')) }; }
+  try { const saved = JSON.parse(fs.readFileSync(cfgPath(), 'utf8')); delete saved.snapshotFps; /* obsolete setting from the snapshot-polling days */ return { ...DEFAULTS, ...saved }; }
   catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
 let config;
@@ -61,10 +60,10 @@ function httpPost(ip, pathAndQuery, body) {
 }
 // ---- Auto tracking (Move SE): REST API /api/v1/control/track. Deliberately single-camera only: the renderer never
 // sends tracking to more than one camera, and only these fields/values are accepted here. ----
-function httpJson(ip, method, path, obj) {
+function httpJson(ip, method, urlPath, obj) {
   return new Promise((resolve, reject) => {
     const body = obj ? JSON.stringify(obj) : null;
-    const req = http.request({ host: ip, path, method, timeout: 2500, agent: false,
+    const req = http.request({ host: ip, path: urlPath, method, timeout: 2500, agent: false,
       headers: body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {} }, (res) => {
       let b = ''; res.on('data', (d) => (b += d));
       res.on('end', () => { try { resolve(JSON.parse(b)); } catch { reject(new Error('unexpected reply')); } });
@@ -167,11 +166,7 @@ async function viscaCmd(i, a) {
     case 'focusManual': return c.send(cmds.focusManual);
     case 'focusLock': return c.send(a.on ? cmds.focusLock : cmds.focusUnlock);
     case 'focusOnePush': return c.send(cmds.focusOnePush);
-    case 'abs': return c.send(cmds.panTiltAbs(a.pan_speed, a.tilt_speed, a.pan, a.tilt));
-    case 'rel': return c.send(cmds.panTiltRel(a.pan_speed, a.tilt_speed, a.dpan, a.dtilt));
-    case 'zoomDirect': return c.send(cmds.zoomDirect(a.zoom));
     case 'position': return getPosition(c);
-    case 'exposure': return getExposure(c);
     case 'flicker': return c.send(cmds.flicker(a.value));
     case 'aeMode': return c.send(cmds.aeMode(a.mode));
     case 'iris': return c.send(a.dir === 'up' ? cmds.irisUp : a.dir === 'down' ? cmds.irisDown : cmds.irisDirect(a.value));
