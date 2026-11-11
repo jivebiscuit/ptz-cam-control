@@ -33,6 +33,8 @@ npm run dist:mac     # on a Mac: unpacked app in dist/
 The build scripts check that the bundled ffmpeg matches the target and refuse to continue if it does not.
 The Windows build has not yet been run on a Windows machine.
 
+**Windows without a Windows dev machine:** `.github/workflows/release.yml` builds the portable exe on GitHub's Windows runner and attaches it to a release. Push a tag (`git tag v0.2.0 && git push origin v0.2.0`), or use Actions > Windows release > Run workflow with an existing tag. The exe needs no Node or npm on the machine that runs it. It is not code-signed, so Windows SmartScreen may warn: choose More info > Run anyway.
+
 ## Code layout (`src/`)
 Main process: `main.js` (window, IPC, command validation), `camhttp.js` (HTTP to the cameras), `visca.js`, `streams.js` (ffmpeg video), `config.js`, `validate.js`.
 The page is plain scripts that share one global scope, loaded in this order by `index.html`: `util`, `copyflow` (copy-to-other-cameras logic), `core` (shared state and helpers), then one file per area
