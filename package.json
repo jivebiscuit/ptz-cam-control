@@ -34,8 +34,12 @@
     "asarUnpack": [
       "node_modules/ffmpeg-static/**"
     ],
+    "afterPack": "scripts/adhoc-sign.js",
     "mac": {
-      "identity": null
+      "identity": null,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "SOTH Cam Control talks to the PTZ cameras on your local network (video, pan/tilt/zoom and settings)."
+      }
     }
   },
   "dependencies": {

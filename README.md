@@ -55,5 +55,9 @@ The tile shows the reason when it knows it:
 - **Connection refused / timed out**: camera off, wrong address, or not on the same network.
 - **Connection works but no video**: another RTSP client may be using the stream, or the camera needs a reboot (South once needed one for stuck tracking).
 
+## Mac: packaged app freezes or shows "No route to host"
+macOS blocks apps from local-network devices until they are allowed in **System Settings → Privacy & Security → Local Network**. Without it the feeds say "No route to host" and the app can freeze (beach ball) because closing the blocked sockets stalls.
+The build includes the permission text and is ad-hoc signed, but macOS may still not list or prompt for it. Copy the app to /Applications, open the Local Network page, click **+**, add *SOTH Cam Control.app*, then relaunch (this fixed it on the development Mac). `npm start` always works because Electron.app is already allowed. Windows has no such permission.
+
 ## More
 Verified camera behavior, command formats and gotchas: [docs/camera-notes.md](docs/camera-notes.md).
