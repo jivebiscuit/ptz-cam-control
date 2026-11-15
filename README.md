@@ -43,12 +43,26 @@ Shortcuts are ignored while typing in a field.
 
 ## How it works
 
-```
- Renderer (index.html + scripts)            Main process (main.js)                    Camera
- ───────────────────────────────            ──────────────────────                    ──────
- window.api.visca / http  ── IPC ──►  validate every value ─► VISCA over TCP :5678 ──►  PTZ, focus, presets, exposure
- (preload.js, contextBridge)                                └► HTTP CGI / REST :80  ──►  image settings, tracking, read-back
- <img src="http://127.0.0.1:…/cam/…"> ◄── StreamServer ◄── one ffmpeg per camera ◄──── RTSP :554 (H.264, stream 2)
+```mermaid
+flowchart LR
+  subgraph R["Renderer (index.html + scripts)"]
+    UI["Page UI<br/>window.api via preload.js"]
+    IMG["img tag showing video"]
+  end
+  subgraph M["Main process (main.js)"]
+    V["Validate every value"]
+    SS["StreamServer<br/>127.0.0.1 + token"]
+    FF["One ffmpeg per camera"]
+  end
+  subgraph C["PTZOptics camera"]
+    VI["VISCA TCP :5678<br/>PTZ, focus, presets, exposure"]
+    HT["HTTP CGI / REST :80<br/>image settings, tracking, read-back"]
+    RT["RTSP :554<br/>H.264 stream 2"]
+  end
+  UI -- IPC --> V
+  V --> VI
+  V --> HT
+  RT --> FF --> SS --> IMG
 ```
 
 **Control.** The page never talks to a camera directly. It calls `window.api` (defined in `preload.js` with `contextIsolation` on, `nodeIntegration` off and `sandbox` on), which sends an IPC message to the main process. `main.js` treats every message as untrusted: the camera index, command type and each value are range-checked (`validate.js`, the `IMAGE_RANGE` table, etc.) before anything is sent. Two protocols are used:
