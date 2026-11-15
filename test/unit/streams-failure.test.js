@@ -5,9 +5,14 @@ const { fake, loadStreams, gaps, posixOnly } = require('./helpers/fake-ffmpeg');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const opts = { skip: posixOnly };
 
+// Every server a test starts is stopped afterwards, even when an assertion fails: a feed that keeps retrying would
+// otherwise keep the test process alive and turn one failure into a hang.
+const started = [];
+test.afterEach(() => { started.splice(0).forEach((s) => s.stopAll()); });
+
 async function run(ffmpeg, seconds) {
   const { StreamServer, spawns } = loadStreams(ffmpeg);
-  const s = new StreamServer();
+  const s = new StreamServer(); started.push(s);
   await s.start([{ ip: '203.0.113.9' }]);
   await wait(seconds * 1000);
   return { s, spawns, live: s.status()[0], reason: s.errors()[0] };
