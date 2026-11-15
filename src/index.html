@@ -75,7 +75,7 @@
       <p class="hint noall">Selected camera only. Tracking is never sent to all cameras.</p>
       <h3>Automation</h3>
       <div class="seg" id="trkSeg">
-        <button data-mode="off">Off</button><button data-mode="tracking">Auto tracking</button><button data-mode="autoframe">Auto framing</button>
+        <button data-mode="off">Off</button><button data-mode="tracking">Auto tracking</button>
       </div>
       <div class="per" id="per-trkmode"></div>
       <p class="hint" id="trkHint"></p>
@@ -104,13 +104,15 @@
     <div id="drawerBtns"></div>
 
     <div id="panelBody">
-      <div class="row">
-        <span class="lbl">Protocol</span>
-        <label><input type="radio" name="proto" value="http" checked> HTTP</label>
-        <label><input type="radio" name="proto" value="visca"> VISCA</label>
-      </div>
-      <div class="row"><span class="lbl">Speed</span>
-        <input id="speed" type="range" min="1" max="20" value="8"><b id="speedVal">8</b></div>
+      <h3 class="scenesH">Scenes <small>(recalls a preset on every camera)</small></h3>
+      <div id="scenes"></div>
+      <p id="atemNote" class="hint atemNote" hidden>ATEM not connected: scenes will move every camera, including the one on air.</p>
+
+      <!-- speed sliders, limited to the camera's documented ranges: pan 1-24, tilt 1-20, zoom 1-7, focus 1-7 -->
+      <div class="row speedRow"><span class="lbl" title="Pan speed">Pan</span><input id="speedPan" type="range" min="1" max="24" value="10" aria-label="Pan speed"><b id="speedPanV" class="spv">10</b></div>
+      <div class="row speedRow"><span class="lbl" title="Tilt speed">Tilt</span><input id="speedTilt" type="range" min="1" max="20" value="8" aria-label="Tilt speed"><b id="speedTiltV" class="spv">8</b></div>
+      <div class="row speedRow"><span class="lbl" title="Zoom speed">Zoom</span><input id="speedZoom" type="range" min="1" max="7" value="3" aria-label="Zoom speed"><b id="speedZoomV" class="spv">3</b></div>
+      <div class="row speedRow"><span class="lbl" title="Focus speed">Focus</span><input id="speedFocus" type="range" min="1" max="7" value="3" aria-label="Focus speed"><b id="speedFocusV" class="spv">3</b></div>
 
       <div class="pad">
         <button data-d="upleft">↖</button><button data-d="up">▲</button><button data-d="upright">↗</button>
@@ -121,20 +123,15 @@
       <div class="row"><span class="lbl">Zoom</span><button data-z="out">−</button><button data-z="in">+</button></div>
       <div class="row"><span class="lbl">Focus</span><button data-f="out">near</button><button data-f="in">far</button>
         <button id="afLock" title="Freeze current focus (stops AF hunting)">🔓 Lock</button></div>
-      <div class="row"><span class="lbl">AF mode</span><button id="afAuto">Auto</button><button id="afManual">Manual</button><button id="afPush">One-push</button></div>
+      <div class="row"><span class="lbl">AF mode</span><button id="afAuto">Auto</button><button id="afManual">Manual</button></div>
 
       <div class="row"><span class="lbl">Tracking</span><span class="seg mini" id="trkQuick" title="Selected camera only">
-        <button data-mode="off">Off</button><button data-mode="tracking">Track</button><button data-mode="autoframe">Frame</button></span></div>
+        <button data-mode="off">Off</button><button data-mode="tracking">Track</button></span></div>
 
       <div id="readout"><span>Pan <b id="rPan">—</b></span><span>Tilt <b id="rTilt">—</b></span><span>Zoom <b id="rZoom">—</b></span></div>
 
       <details id="presetsBox" open><summary>Presets <small>(shift-click or long-press = save)</small></summary>
         <div id="presets"></div>
-        <div class="ispWrap">
-          <label class="ispRow" title="Off (recommended): recalling a preset moves pan, tilt, zoom and focus only. On: it also applies the color and exposure settings that were saved with the preset. Applies to all cameras."><input type="checkbox" id="ispChk"><span>Recall color &amp; exposure with presets</span></label>
-          <div class="per" id="per-isp"></div>
-          <p class="hint ispHint">Off = presets move the camera only. All four cameras are changed together.</p>
-        </div>
       </details>
     </div>
 
@@ -144,6 +141,12 @@
 </div>
 <div id="dlg" hidden><div class="box">
   <h3>Settings</h3><div id="camFields"></div>
+  <h3>Scenes <small>(up to 12 · preset 1–254 per camera · blank = leave that camera alone)</small></h3>
+  <div id="sceneFields"></div>
+  <div class="row"><button id="addScene" class="secondary">+ Add scene</button></div>
+  <h3>ATEM switcher <small>(optional · shows Program/Preview on the tiles; a scene waits to move a camera that is on air)</small></h3>
+  <div class="row"><span class="lbl">Address</span><input id="atemIp" maxlength="253" placeholder="e.g. 192.168.0.240 (blank = off)" aria-label="ATEM address"></div>
+  <div class="row" id="atemInputs"></div>
   <div id="cfgErr" class="cfgErr" role="alert" hidden></div>
   <div class="row"><button id="saveCfg">Save</button><button id="cancelCfg">Cancel</button></div>
 </div></div>
@@ -159,7 +162,9 @@
 <script src="image.js"></script>
 <script src="adv.js"></script>
 <script src="color.js"></script>
-<script src="presets.js"></script>
+<script src="scenewatch.js"></script>
+<script src="onair.js"></script>
+<script src="scenes.js"></script>
 <script src="tracking.js"></script>
 <script src="app.js"></script>
 </body></html>
