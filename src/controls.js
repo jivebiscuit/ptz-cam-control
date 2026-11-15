@@ -38,7 +38,9 @@ function initControls() {
     const save = () => { cam({ type: 'presetSet', n }); setStatus(`Saved preset ${n} on ${cfg.cameras[sel].name}`); };
     b.onmousedown = () => { longed = false; timer = setTimeout(() => { longed = true; save(); }, 800); };
     b.onmouseup = () => clearTimeout(timer);
-    b.onclick = (e) => { if (longed) return; if (e.shiftKey) save(); else cam({ type: 'presetRecall', n }); };
+    // recalling moves the camera: if it is on air (ATEM Program) ask first. Saving a preset does not move it, so no question.
+    const recall = () => { if (!onAir(sel) || confirm(`${cfg.cameras[sel].name} is ON AIR (ATEM Program).\n\nMove it to preset ${n} anyway?`)) cam({ type: 'presetRecall', n }); };
+    b.onclick = (e) => { if (longed) return; if (e.shiftKey) save(); else recall(); };
     P.appendChild(b);
   }
 

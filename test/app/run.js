@@ -229,6 +229,16 @@ app.whenReady().then(async () => {
     fakeAtem.enabled = true; fakeAtem.connected = true; fakeAtem.program = 2; fakeAtem.preview = 3; await wait(1000);   // input 2 = Center (camera index 1), input 3 = North
     const tallies = () => js(`[...document.querySelectorAll('.cell .tally')].map((e) => e.textContent).join()`);
     check((await tallies()) === ',PGM,PVW,', 'tiles show PGM on the Program camera and PVW on the Preview camera');
+    // the preset buttons ask before moving a camera that is on air
+    const presetClick = (k) => js(`document.querySelectorAll('#presets button')[${k}].dispatchEvent(new MouseEvent('click', { bubbles: true })); 0`);
+    await js(`document.querySelectorAll('.cell')[1].click(); 0`); await wait(200);   // Center, on air
+    await js(`window.__asked = []; window.confirm = (m) => { window.__asked.push(m); return false; }; 0`);
+    check(none(await sent(async () => { await presetClick(2); })) && (await js(`window.__asked.length`)) === 1 && /Center is ON AIR/.test(await js(`window.__asked[0]`)), 'a preset button on the on-air camera asks first, and does nothing when you say no');
+    await js(`window.confirm = (m) => { window.__asked.push(m); return true; }; 0`);
+    check((await sent(async () => { await presetClick(2); })).join() === 'poscall&3' && writes[0].cam === 1, 'it moves the on-air camera when you say yes');
+    await js(`document.querySelectorAll('.cell')[0].click(); 0`); await wait(200);   // South, not on air
+    check((await sent(async () => { await presetClick(2); })).join() === 'poscall&3' && (await js(`window.__asked.length`)) === 2, 'a camera that is not on air is moved without a question');
+    await js(`window.confirm = () => true; 0`);
     // Sermon = South 3, Center 4, North none, Rear 9. Center is on air, so it waits.
     const held = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(500); });
     check(writes.length === 2 && !writes.some((w) => w.cam === 1) && writes.some((w) => w.cam === 0 && w.what === 'poscall&3') && writes.some((w) => w.cam === 3 && w.what === 'poscall&9'), 'a scene does not move the camera that is on air');
