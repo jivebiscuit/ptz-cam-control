@@ -56,13 +56,25 @@ test('a viewer that stops reading is cut off; a normal viewer is kept; memory st
     sock.on('error', () => {});
   });
   await wait(1500);
-  const reader = await open(true), stalled = await open(false);
-  await wait(1000);
-  assert.equal(s.feeds[0].clients.size, 2, 'both viewers connected');
-  const before = process.memoryUsage().rss;
-  await wait(5000);
-  assert.equal(s.feeds[0].clients.size, 1, 'the stalled viewer was dropped once 4 MB behind');
-  const growthMB = (process.memoryUsage().rss - before) / 1048576;
-  assert.ok(growthMB < 80, `memory stayed bounded (grew ${Math.round(growthMB)} MB)`);
-  reader.destroy(); stalled.destroy(); s.stopAll();
+  const socks = [];
+  try {
+    // Watch the viewer count while connecting: on a fast machine the stalled viewer can already be 4 MB behind (and cut off)
+    // within a second, so a single check after a fixed wait is a race. The count must reach 2 at some point.
+    let peak = 0;
+    const watcher = setInterval(() => { peak = Math.max(peak, s.feeds[0].clients.size); }, 5);
+    socks.push(await open(true), await open(false));
+    await wait(1000);
+    clearInterval(watcher);
+    assert.equal(peak, 2, 'both viewers connected');
+    const before = process.memoryUsage().rss;
+    for (let i = 0; i < 100 && s.feeds[0].clients.size !== 1; i++) await wait(100); // up to 10 s
+    assert.equal(s.feeds[0].clients.size, 1, 'the stalled viewer was dropped once 4 MB behind');
+    await wait(1000);
+    assert.equal(s.feeds[0].clients.size, 1, 'the normal viewer is kept');
+    const growthMB = (process.memoryUsage().rss - before) / 1048576;
+    assert.ok(growthMB < 80, `memory stayed bounded (grew ${Math.round(growthMB)} MB)`);
+  } finally {
+    // always release the sockets and the fake ffmpeg, so a failed assertion cannot leave the test process hanging
+    socks.forEach((k) => k.destroy()); s.stopAll();
+  }
 });
