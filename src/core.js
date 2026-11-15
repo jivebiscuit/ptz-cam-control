@@ -1,15 +1,19 @@
 // Shared basics: selected camera, status line, sending commands (to one camera or all), scale formatting, small helpers.
 const $ = (s) => document.querySelector(s);
 let cfg, sel = 0, tileEls = [];
-const state = { proto: 'http', locked: {} }; // locked[camIndex] — camera can't report lock state, so we track it
+const state = { locked: {} }; // locked[camIndex] — camera can't report lock state, so we track it
 
 const setStatus = (m, err) => { const s = $('#status'); s.textContent = m; s.title = m; s.className = err ? 'err' : ''; };
 // don't leave a clicked button focused (it would show a focus ring and react to Space/Enter)
 document.addEventListener('mouseup', (e) => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
 // dropdowns, sliders, checkboxes and radios give up keyboard focus once you've used them, so the shortcuts work again
 document.addEventListener('change', (e) => { const t = e.target; if (t && t.matches && t.matches('select, input[type=range], input[type=checkbox], input[type=radio]')) t.blur(); }, true);
-const cam = (a, forceVisca) => (forceVisca || state.proto === 'visca' ? window.api.visca(sel, a) : window.api.http(sel, a))
-  .then((r) => { if (!r.ok) setStatus(`${cfg.cameras[sel].name}: ${r.error}`, true); return r; });
+const MOVE_CMDS = new Set(['move', 'zoom', 'home', 'presetRecall']); // commands that move a camera: they end the highlighted scene
+const cam = (a, forceVisca) => {
+  if (MOVE_CMDS.has(a.type) && a.dir !== 'stop') clearScene();
+  return (forceVisca ? window.api.visca(sel, a) : window.api.http(sel, a))
+    .then((r) => { if (!r.ok) setStatus(`${cfg.cameras[sel].name}: ${r.error}`, true); return r; });
+};
 
 // ---- scale (measured on an F64: pan ±2448, tilt -432..+1296, zoom 0..16384) ----
 const UNITS_PER_DEG = 14.4;                 // 2448/170°, 1296/90°, 432/30°

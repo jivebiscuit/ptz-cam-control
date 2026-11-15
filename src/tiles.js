@@ -5,14 +5,14 @@ function buildTiles() {
   const mv = $('#multiview'); mv.innerHTML = ''; tileEls = [];
   cfg.cameras.forEach((c, i) => {
     const t = document.createElement('div'); t.className = 'cell off';
-    t.innerHTML = `<div class="tile"><img alt=""><div class="tag">${i + 1} · ${esc(c.name)}<i>${esc(c.ip)}</i></div><div class="badges"><span class="trk"></span><span class="pimg"></span><span class="fmode"></span></div></div>
+    t.innerHTML = `<div class="tile"><img alt=""><div class="tag">${i + 1} · ${esc(c.name)}<i>${esc(c.ip)}</i></div><div class="badges"><span class="tally"></span><span class="trk"></span><span class="fmode"></span></div></div>
       <div class="cap"><div class="pos stale"><span class="pp">— no position —</span><span class="adv"></span></div><div class="exp"></div></div>`;
     const img = t.querySelector('img');
     img.addEventListener('error', () => setTimeout(() => { if (streamBase) img.src = `${streamBase}/${i}?t=${Date.now()}`; }, 1500));
     t.onclick = () => select(i);
     mv.appendChild(t); tileEls.push(t);
   });
-  select(sel);
+  select(sel); renderOnAir();
 }
 function attachStreams() {
   tileEls.forEach((t, i) => { t.querySelector('img').src = `${streamBase}/${i}?t=${Date.now()}`; });

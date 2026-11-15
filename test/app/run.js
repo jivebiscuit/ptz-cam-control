@@ -69,6 +69,10 @@ ViscaClient.prototype.send = async function (hex) {
   if (b[2] === '04' && ['4a', '4b', '4c'].includes(b[3]) && b[4] === '00') camWrite(i, { '4a': 'shutter', '4b': 'iris', '4c': 'manual_gain' }[b[3]], (parseInt(b[6], 16) & 15) * 16 + (parseInt(b[7], 16) & 15));
 };
 ViscaClient.prototype.inquire = async function () { throw new Error('offline'); };
+// fake ATEM: the test sets what the switcher "reports"; the real library is never started
+const atemMod = require('../../src/atem');
+const fakeAtem = { enabled: false, connected: false, program: null, preview: null };
+atemMod.start = (ip) => { fakeAtem.ip = ip; }; atemMod.stop = () => {}; atemMod.status = () => ({ ...fakeAtem });
 
 require('../../src/main.js');
 
@@ -109,17 +113,33 @@ app.whenReady().then(async () => {
     await click('#cancelCfg'); await js(`document.activeElement.blur(); 0`);
     await click('#drawerBtns button[data-drawer="drawer-exposure"]'); await wait(300);
     await focus('#aeMode'); check(none(await sent(async () => { await press('ArrowDown'); await press('ArrowUp'); })), 'arrow keys on a dropdown do not move the camera');
-    await focus('#speed'); check(none(await sent(async () => { await press('ArrowRight'); })), 'arrow keys on a slider do not move the camera');
+    await focus('#speedPan'); check(none(await sent(async () => { await press('ArrowRight'); })), 'arrow keys on a slider do not move the camera');
     await js(`document.activeElement.blur(); 0`);
     check(/^left&\d+&\d+,ptzstop&1&1$/.test((await sent(async () => { await key('keydown', 'ArrowLeft'); await js(`window.dispatchEvent(new Event('blur')); 0`); })).join()), 'losing window focus while a key is held stops the camera');
     check((await js(`(() => { const s = document.querySelector('#aeMode'); s.focus(); s.dispatchEvent(new Event('change', { bubbles: true })); return document.activeElement.tagName; })()`)) === 'BODY', 'a dropdown gives up keyboard focus after use');
 
+    console.log('\n-- speed sliders and removed controls --');
+    const bounds = await js(`['speedPan','speedTilt','speedZoom','speedFocus'].map((id) => { const e = document.getElementById(id); return e.min + '-' + e.max; }).join()`);
+    check(bounds === '1-24,1-20,1-7,1-7', 'pan, tilt, zoom and focus sliders use the camera\'s documented ranges');
+    await js(`(() => { const set = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }; set('speedPan', 20); set('speedTilt', 5); set('speedZoom', 6); set('speedFocus', 2); })()`);
+    check((await js(`document.getElementById('speedPanV').textContent`)) === '20', 'moving a speed slider updates its number');
+    check(/^up&20&5,ptzstop/.test((await sent(async () => { await key('keydown', 'ArrowUp'); await key('keyup', 'ArrowUp'); })).join()), 'a move uses the pan and tilt sliders separately');
+    check((await sent(async () => { await key('keydown', '='); await key('keyup', '='); })).join().startsWith('zoomin&6'), 'zoom uses the zoom slider');
+    await js(`document.querySelectorAll('.cell')[0].click(); 0`);
+    check((await sent(async () => { await js(`document.querySelector('[data-f="in"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); window.dispatchEvent(new MouseEvent('mouseup')); 0`); })).join().startsWith('focusin&2'), 'focus uses the focus slider');
+    check((await js(`[...document.querySelectorAll('#presets button')].map((b) => b.textContent).join()`)) === '1,2,3,4,5,6,7,8,9,10', 'the preset buttons are 1 to 10 (no preset 0)');
+    check((await js(`!document.querySelector('input[name=proto]') && [...document.querySelectorAll('.speedRow .lbl')].map((e) => e.textContent).join()`)) === 'Pan,Tilt,Zoom,Focus', 'the protocol choice is gone and the speed sliders are labelled Pan, Tilt, Zoom, Focus');
+    check((await js(`new Set([...document.querySelectorAll('.speedRow input')].map((e) => Math.round(e.getBoundingClientRect().width))).size`)) === 1, 'the four speed sliders are the same width');
+    check((await js(`!document.querySelector('#afPush') && !document.querySelector('[data-mode="autoframe"]') && !document.querySelector('#ispChk') && !document.querySelector('.pimg')`)), 'One-push AF, Frame / Auto framing and the preset color-recall tick are gone');
+    const refused = await js(`window.api.http(0, { type: 'trackSet', body: { trackMode: 'autoframe' } })`);
+    check(refused.ok === false && /refused/.test(refused.error), 'turning on Auto framing is refused by the app');
+
     console.log('\n-- the right camera gets the command --');
     await js(`document.querySelectorAll('.cell')[2].click(); 0`); await wait(200);
     check((await js(`document.querySelector('#selName').textContent`)).includes('North'), 'clicking tile 3 selects North');
-    const rec = await sent(async () => { await js(`document.querySelectorAll('#presets button')[3].dispatchEvent(new MouseEvent('click', { bubbles: true })); 0`); });
+    const rec = await sent(async () => { await js(`document.querySelectorAll('#presets button')[2].dispatchEvent(new MouseEvent('click', { bubbles: true })); 0`); });
     check(rec.join() === 'poscall&3' && writes[0].cam === 2, 'preset 3 recalls preset 3 (not preset 0) on the selected camera');
-    const sav = await sent(async () => { await js(`document.querySelectorAll('#presets button')[3].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })); 0`); });
+    const sav = await sent(async () => { await js(`document.querySelectorAll('#presets button')[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })); 0`); });
     check(sav.join() === 'posset&3', 'shift-click saves to preset 3');
     const trk = await sent(async () => { await click('#trkQuick button[data-mode="tracking"]'); });
     check(trk.length === 1 && writes[0].cam === 2, 'the tracking quick row writes to the selected camera only (one camera, one write)');
@@ -181,6 +201,69 @@ app.whenReady().then(async () => {
     check(/still different/.test(await status()) && /Luminance/.test(await status()), 'a camera that ignores a value is reported as "still different", not as success');
     cams.on = false;
 
+    console.log('\n-- scenes --');
+    await js(`document.querySelectorAll('.cell')[0].click(); 0`);
+    check((await js(`document.querySelectorAll('#scenes button').length`)) === 0, 'with no scenes saved the bar shows a hint, no buttons');
+    await click('#settingsBtn'); await click('#addScene'); await click('#addScene');
+    await js(`(() => { const r = document.querySelectorAll('#sceneFields .sf:not(.sfh)'); const set = (row, vals) => vals.forEach((v, k) => { row.querySelectorAll('input')[k].value = v; });
+      set(r[0], ['Sermon', '3', '4', '', '9']); set(r[1], ['Bells', '', '', '7', '']); document.querySelector('#saveCfg').click(); })()`); await wait(700);
+    check((await js(`document.querySelector('#dlg').hidden`)) && (await js(`[...document.querySelectorAll('#scenes button')].map((b) => b.textContent).join()`)) === 'Sermon,Bells', 'scenes added in Settings appear as buttons');
+    check(/"scenes"/.test(fs.readFileSync(path.join(userData, 'config.json'), 'utf8')), 'scenes are saved to the settings file');
+    const sc = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(400); });
+    check(writes.length === 3 && [0, 1, 3].every((c) => writes.some((w) => w.cam === c && w.what === `poscall&${[3, 4, 0, 9][c]}`)) && !writes.some((w) => w.cam === 2), 'a scene recalls its preset on each camera at once and leaves blank cameras alone');
+    check((await js(`document.querySelector('#scenes button[data-i="0"]').classList.contains('active')`)), 'the pressed scene is highlighted');
+    await click('#scenes button[data-i="1"]'); await wait(400);
+    check((await js(`[...document.querySelectorAll('#scenes button.active')].map((b) => b.textContent).join()`)) === 'Bells', 'pressing another scene moves the highlight');
+    await js(`document.activeElement.blur(); 0`); await press('h'); await wait(200);
+    check((await js(`document.querySelectorAll('#scenes button.active').length`)) === 0, 'moving a camera clears the highlighted scene');
+    check(sc.length === 3, 'scene recall sent exactly one command per camera');
+    await js(`document.activeElement.blur(); 0`);
+
+    console.log('\n-- ATEM Program / Preview --');
+    await click('#settingsBtn');
+    await js(`document.querySelector('#atemIp').value = '192.168.0.240'; 0`);
+    await js(`document.querySelectorAll('#atemInputs input')[1].value = '1'; document.querySelector('#saveCfg').click(); 0`); await wait(500);
+    check(!(await js(`document.querySelector('#dlg').hidden`)) && /more than one camera is set to input 1/.test(await js(`document.querySelector('#cfgErr').textContent`)), 'two cameras on the same ATEM input is refused');
+    await js(`document.querySelectorAll('#atemInputs input')[1].value = '2'; document.querySelector('#saveCfg').click(); 0`); await wait(700);
+    check(fakeAtem.ip === '192.168.0.240', 'saving an ATEM address starts the switcher link');
+    fakeAtem.enabled = true; fakeAtem.connected = true; fakeAtem.program = 2; fakeAtem.preview = 3; await wait(1000);   // input 2 = Center (camera index 1), input 3 = North
+    const tallies = () => js(`[...document.querySelectorAll('.cell .tally')].map((e) => e.textContent).join()`);
+    check((await tallies()) === ',PGM,PVW,', 'tiles show PGM on the Program camera and PVW on the Preview camera');
+    // the preset buttons ask before moving a camera that is on air
+    const presetClick = (k) => js(`document.querySelectorAll('#presets button')[${k}].dispatchEvent(new MouseEvent('click', { bubbles: true })); 0`);
+    await js(`document.querySelectorAll('.cell')[1].click(); 0`); await wait(200);   // Center, on air
+    await js(`window.__asked = []; window.confirm = (m) => { window.__asked.push(m); return false; }; 0`);
+    check(none(await sent(async () => { await presetClick(2); })) && (await js(`window.__asked.length`)) === 1 && /Center is ON AIR/.test(await js(`window.__asked[0]`)), 'a preset button on the on-air camera asks first, and does nothing when you say no');
+    await js(`window.confirm = (m) => { window.__asked.push(m); return true; }; 0`);
+    check((await sent(async () => { await presetClick(2); })).join() === 'poscall&3' && writes[0].cam === 1, 'it moves the on-air camera when you say yes');
+    await js(`document.querySelectorAll('.cell')[0].click(); 0`); await wait(200);   // South, not on air
+    check((await sent(async () => { await presetClick(2); })).join() === 'poscall&3' && (await js(`window.__asked.length`)) === 2, 'a camera that is not on air is moved without a question');
+    await js(`window.confirm = () => true; 0`);
+    // Sermon = South 3, Center 4, North none, Rear 9. Center is on air, so it waits.
+    const held = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(500); });
+    check(writes.length === 2 && !writes.some((w) => w.cam === 1) && writes.some((w) => w.cam === 0 && w.what === 'poscall&3') && writes.some((w) => w.cam === 3 && w.what === 'poscall&9'), 'a scene does not move the camera that is on air');
+    check((await js(`document.querySelector('#scenes button[data-i="0"]').className`)) === 'pending', 'the scene shows as waiting while a camera is held');
+    check(held.length === 2 && /on air, will move when off Program/.test(await status()), 'the status line says which camera is waiting');
+    writes.length = 0; fakeAtem.program = 3; fakeAtem.preview = 2; await wait(1200);   // cut to North: Center is free
+    check(writes.length === 1 && writes[0].cam === 1 && writes[0].what === 'poscall&4', 'the held camera moves as soon as it leaves Program');
+    check((await js(`document.querySelector('#scenes button[data-i="0"]').className`)) === 'active', 'the scene becomes active once everything has been sent');
+    // a scene still waiting is cancelled by an operator move; and the Preview camera is moved normally
+    fakeAtem.program = 2; fakeAtem.preview = 1; await wait(1000);
+    const s2 = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(500); });
+    check(s2.length === 2 && writes.some((w) => w.cam === 0), 'a Preview camera is moved like any other');
+    await js(`document.activeElement.blur(); 0`); await press('h'); await wait(200);
+    writes.length = 0; fakeAtem.program = 3; await wait(1200);
+    check(writes.length === 0 && (await js(`document.querySelectorAll('#scenes button.pending, #scenes button.active').length`)) === 0, 'an operator move cancels the waiting move: nothing is sent when the camera leaves Program');
+    // the switcher is unreachable: scenes still recall every camera, and say so
+    fakeAtem.connected = false; fakeAtem.program = null; fakeAtem.preview = null; await wait(1000);
+    const off = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(500); });
+    check(off.length === 3 && /ATEM not connected/.test(await status()) && !(await js(`document.querySelector('#atemNote').hidden`)), 'with the ATEM unreachable every camera still recalls, with a warning');
+    fakeAtem.enabled = false; await wait(800);
+    await click('#settingsBtn');
+    await js(`document.querySelectorAll('#sceneFields .sf:not(.sfh)')[0].querySelectorAll('input')[1].value = '300'; document.querySelector('#saveCfg').click(); 0`); await wait(500);
+    check(!(await js(`document.querySelector('#dlg').hidden`)) && /preset number/.test(await js(`document.querySelector('#cfgErr').textContent`)), 'an out-of-range preset keeps Settings open and says why');
+    await click('#cancelCfg');
+
     console.log('\n-- settings --');
     const cfgFile = path.join(userData, 'config.json');
     const hash = () => (fs.existsSync(cfgFile) ? crypto.createHash('sha1').update(fs.readFileSync(cfgFile)).digest('hex') : 'absent');
@@ -196,7 +279,7 @@ app.whenReady().then(async () => {
     await click('#cancelCfg');
 
     console.log('\n-- camera names are text, never markup --');
-    await js(`(() => { cfg.cameras[0].name = '<img src=x onerror="window.__xss=1">"\\'&<b>'; buildTiles(); renderAdv(); renderTrack(); renderIsp(); renderImg(); renderColor(); openSettings(); })()`); await wait(400);
+    await js(`(() => { cfg.cameras[0].name = '<img src=x onerror="window.__xss=1">"\\'&<b>'; buildTiles(); renderAdv(); renderTrack(); renderImg(); renderColor(); openSettings(); })()`); await wait(400);
     check((await js(`window.__xss`)) === undefined && (await js(`document.querySelectorAll('img[src="x"], .tag img, .tag b, .per img, .per b').length`)) === 0, 'a name containing markup does not run or create elements');
     check((await js(`document.querySelector('.cell .tag').textContent`)).includes('<img src=x onerror="window.__xss=1">'), 'it is shown literally, as typed');
     await click('#cancelCfg');

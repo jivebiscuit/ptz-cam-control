@@ -31,7 +31,7 @@ function declaredNames(text) {
   return names;
 }
 for (const f of pageScripts) {
-  for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+  for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { // CRLF checkouts (Windows) too
     const fn = /^(?:async\s+)?function\s+([\w$]+)/.exec(line);
     if (fn) { pageGlobals[fn[1]] = 'writable'; continue; }
     const decl = /^(?:const|let)\s+(.*)$/.exec(line);
