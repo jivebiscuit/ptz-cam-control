@@ -1,14 +1,11 @@
-// Operator controls: pan/tilt/zoom/focus buttons, presets 0-9 and the keyboard shortcuts.
+// Operator controls: pan/tilt/zoom/focus buttons, presets 1-10 and the keyboard shortcuts.
 // ---- PTZ ----
-const speed = () => +$('#speed').value;
-// HTTP pan 1-24, tilt 1-20 ; slider 1-20 maps directly
-const panSp = () => Math.min(24, Math.round(speed() * 1.2)), tiltSp = () => speed();
+// One slider per axis, each with the camera's documented range (pan 1-24, tilt 1-20, zoom 1-7, focus 1-7; see index.html)
+const panSp = () => +$('#speedPan').value, tiltSp = () => +$('#speedTilt').value;
+const zoomSp = () => +$('#speedZoom').value, focusSp = () => +$('#speedFocus').value;
 const move = (dir) => cam({ type: 'move', dir, pan: panSp(), tilt: tiltSp() });
 const stopMove = () => cam({ type: 'move', dir: 'stop', pan: 1, tilt: 1 });
-const zoomSp = () => Math.max(1, Math.min(7, Math.round(speed() / 3)));
-const focusSp = () => Math.max(1, Math.min(7, Math.round(speed() / 3)));
 
-// HTTP zoom/focus speeds are 1-7; VISCA variable uses 0-7 — both accepted via zoomSp.
 function hold(el, down, up) {
   const d = (e) => { e.preventDefault(); el.classList.add('on'); down(); };
   const u = () => { if (el.classList.contains('on')) { el.classList.remove('on'); up(); } };
@@ -32,18 +29,18 @@ function initControls() {
     if (!r.ok) return setStatus(`${cfg.cameras[i].name}: ${r.error}`, true);
     state.locked[i] = on; renderLock(); setStatus(`${cfg.cameras[i].name}: focus ${on ? 'LOCKED' : 'unlocked'}`); setTimeout(pollAdv, 500);
   };
-  $('#afPush').onclick = () => cam({ type: 'focusOnePush' }, true);
-  $('#speed').oninput = () => ($('#speedVal').textContent = speed());
-  document.querySelectorAll('input[name=proto]').forEach((r) => (r.onchange = () => (state.proto = r.value)));
+  ['speedPan', 'speedTilt', 'speedZoom', 'speedFocus'].forEach((id) => { $('#' + id).oninput = () => ($('#' + id + 'V').textContent = $('#' + id).value); });
 
-  // presets 0-9 (camera preset numbers 0..9)
+  // presets 1-10 (preset 0 is not used)
   const P = $('#presets');
-  for (let n = 0; n < 10; n++) {
+  for (let n = 1; n <= 10; n++) {
     const b = document.createElement('button'); b.textContent = n; let timer, longed = false;
     const save = () => { cam({ type: 'presetSet', n }); setStatus(`Saved preset ${n} on ${cfg.cameras[sel].name}`); };
     b.onmousedown = () => { longed = false; timer = setTimeout(() => { longed = true; save(); }, 800); };
     b.onmouseup = () => clearTimeout(timer);
-    b.onclick = (e) => { if (longed) return; if (e.shiftKey) save(); else cam({ type: 'presetRecall', n }); };
+    // recalling moves the camera: if it is on air (ATEM Program) ask first. Saving a preset does not move it, so no question.
+    const recall = () => { if (!onAir(sel) || confirm(`${cfg.cameras[sel].name} is ON AIR (ATEM Program).\n\nMove it to preset ${n} anyway?`)) cam({ type: 'presetRecall', n }); };
+    b.onclick = (e) => { if (longed) return; if (e.shiftKey) save(); else recall(); };
     P.appendChild(b);
   }
 
