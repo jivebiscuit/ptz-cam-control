@@ -1,6 +1,6 @@
 {
   "name": "soth-cam-control",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "PTZ camera control and multiview for 4 PTZOptics cameras",
   "main": "src/main.js",
   "scripts": {
@@ -21,6 +21,7 @@
   "build": {
     "appId": "com.soth.camcontrol",
     "productName": "SOTH Cam Control",
+    "npmRebuild": false,
     "files": [
       "src/**/*",
       "package.json"
