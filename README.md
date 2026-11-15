@@ -2,7 +2,7 @@
 
 A desktop app (Electron) for controlling and monitoring four PTZOptics Move SE cameras during a livestream:
 live multiview, pan/tilt/zoom, focus, presets, exposure / image / color / tracking drawers with live read-back, and
-visual alerts when a camera is in an abnormal state (tracking on, manual focus, focus locked, preset image recall, values that differ from the other cameras).
+visual alerts when a camera is in an abnormal state (tracking on, manual focus, focus locked, values that differ from the other cameras).
 
 Default cameras: South 192.168.0.200, Center .201, North .202, Rear .203. Change names and addresses in **Settings**.
 
@@ -18,8 +18,16 @@ npm start
 Use `npm start`, not `electron .`: VS Code terminals set `ELECTRON_RUN_AS_NODE=1`, which makes Electron exit silently. `npm start` clears it.
 
 ## Keyboard
+Pan, tilt, zoom and focus each have their own speed slider, limited to the camera's documented ranges (pan 1–24, tilt 1–20, zoom 1–7, focus 1–7); the keys use the same speeds.
 Arrow keys pan/tilt (hold to move, release to stop), Space stops, `H` goes Home, `1`–`4` selects a camera, `Esc` closes a drawer.
 Shortcuts are ignored while typing in a field.
+
+## Scenes
+A scene is a named button (up to 12) that recalls one preset on every camera at once, e.g. Sermon, Baptism, Choir. Add them in **⚙ Settings → Scenes**: a name plus a preset number (1–254) per camera; leave a camera blank to keep it where it is. The last scene pressed stays highlighted until a camera in it moves (by hand, by tracking, or by any move/zoom/home/preset command).
+
+### ATEM switcher (optional)
+In **⚙ Settings → ATEM switcher** enter the switcher's address and which ATEM input each camera is on. The app then shows a red **PGM** (Program) and green **PVW** (Preview) badge on those tiles. The link is read-only; nothing is ever sent to the switcher.
+Scenes never move the camera that is on air: its recall is held, the scene button turns amber, and the move is sent as soon as that camera leaves Program. An operator move, or pressing another scene, cancels a held move. A Preview camera moves normally. If the ATEM is unreachable, scenes move every camera and the panel warns about it; a move that was already held waits until the ATEM is back rather than being sent blind. Only the first mix effect's Program/Preview is read, so a camera shown through a keyer or picture-in-picture is not detected.
 
 ## Settings and environment
 - Settings are saved in the app's user-data folder as `config.json`; a missing or damaged file falls back to defaults (valid fields are kept).
@@ -37,7 +45,7 @@ Shortcuts are ignored while typing in a field.
 | [Electron](https://www.electronjs.org/) 45 | Desktop shell: a Node.js main process plus a sandboxed Chromium renderer |
 | Plain JavaScript (CommonJS in main, classic `<script>` files in the page) | No framework, no bundler, no transpiler |
 | [ffmpeg-static](https://www.npmjs.com/package/ffmpeg-static) | Bundled ffmpeg binary that turns each camera's RTSP video into something the page can show |
-| Node built-ins (`http`, `net`, `child_process`) | Talking to cameras and serving video; there are no runtime dependencies other than ffmpeg-static |
+| Node built-ins (`http`, `net`, `child_process`) | Talking to cameras and serving video; the only runtime dependencies are ffmpeg-static and atem-connection (the ATEM link) |
 | electron-builder | Packaging (Windows portable exe, unpacked Mac app) |
 | ESLint 10 + `node --test` | Lint (zero warnings) and unit tests |
 

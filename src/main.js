@@ -3,9 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const { ViscaClient, cmds, getPosition } = require('./visca');
 const { StreamServer } = require('./streams');
-const { httpGet, trackGet, trackSet, presetImgRead, presetImgSet, imageConf, advConf } = require('./camhttp');
+const { httpGet, trackGet, trackSet, imageConf, advConf } = require('./camhttp');
 const { int, oneOf, bool } = require('./validate');
 const { cloneDefaults, validateConfig, sanitizeSaved } = require('./config');
+const atem = require('./atem');
 const streams = new StreamServer();
 
 const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
@@ -59,8 +60,6 @@ function httpCmd(ip, a) {
     case 'advConf': return advConf(ip);
     case 'trackGet': return trackGet(ip);
     case 'trackSet': return trackSet(ip, a.body);
-    case 'presetImgRead': return presetImgRead(ip);
-    case 'presetImgSet': return presetImgSet(ip, bool(a.on, 'on'));
     case 'image': {
       const name = oneOf(a.name, Object.keys(IMAGE_RANGE), 'setting'), [lo, hi] = IMAGE_RANGE[name];
       const value = int(a.value, lo, hi, name);
@@ -94,7 +93,6 @@ async function viscaCmd(i, a) {
     case 'focusAuto': return c.send(cmds.focusAuto);
     case 'focusManual': return c.send(cmds.focusManual);
     case 'focusLock': return c.send(bool(a.on, 'on') ? cmds.focusLock : cmds.focusUnlock);
-    case 'focusOnePush': return c.send(cmds.focusOnePush);
     case 'position': return getPosition(c);
     case 'flicker': return c.send(cmds.flicker(int(a.value, 0, 2, 'flicker')));
     case 'aeMode': return c.send(cmds.aeMode(oneOf(int(a.mode, 0, 13, 'exposure mode'), AE_MODES, 'exposure mode')));
@@ -109,6 +107,7 @@ ipcMain.handle('config:get', () => config);
 ipcMain.handle('stream:start', () => streams.start(config.cameras)); // returns the base URL of the (token-protected) video server
 ipcMain.handle('stream:status', () => streams.status());
 ipcMain.handle('stream:errors', () => streams.errors());
+ipcMain.handle('atem:status', () => atem.status());
 ipcMain.handle('config:set', (_e, c) => {
   let next;
   try { next = validateConfig({ ...config, ...(c && typeof c === 'object' ? c : {}) }); }
@@ -117,7 +116,9 @@ ipcMain.handle('config:set', (_e, c) => {
     fs.mkdirSync(path.dirname(cfgPath()), { recursive: true });
     fs.writeFileSync(cfgPath(), JSON.stringify(next, null, 2));
   } catch (e) { return { ok: false, error: `could not save settings: ${e.message}` }; }
+  const atemChanged = next.atem.ip !== config.atem.ip;
   config = next;
+  if (atemChanged) atem.start(config.atem.ip);
   rebuildClients();
   streams.start(config.cameras);
   return { ok: true, config };
@@ -138,6 +139,7 @@ ipcMain.handle('cam:visca', async (_e, i, a) => {
 let win = null;
 function createWindow() {
   config = loadConfig();
+  atem.start(config.atem.ip);
   rebuildClients();
   // this app only ever shows its own page: no permission prompts (camera/mic/location...), no pop-ups, no navigation away
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
@@ -163,4 +165,4 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(createWindow);
 }
 app.on('window-all-closed', () => { visca.forEach((v) => v.close()); streams.stopAll(); app.quit(); });
-app.on('before-quit', () => streams.stopAll());
+app.on('before-quit', () => { streams.stopAll(); atem.stop(); });

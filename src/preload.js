@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('api', {
   startStreams: () => ipcRenderer.invoke('stream:start'),
   streamStatus: () => ipcRenderer.invoke('stream:status'),
   streamErrors: () => ipcRenderer.invoke('stream:errors'),
+  atemStatus: () => ipcRenderer.invoke('atem:status'),
   setConfig: (c) => ipcRenderer.invoke('config:set', c),
   http: (i, a) => ipcRenderer.invoke('cam:http', i, a),
   visca: (i, a) => ipcRenderer.invoke('cam:visca', i, a),

@@ -114,7 +114,6 @@ const cmds = {
   focusManual: '81 01 04 38 03 ff',
   focusLock: '81 0a 04 68 02 ff',
   focusUnlock: '81 0a 04 68 03 ff',
-  focusOnePush: '81 01 04 18 01 ff',
   presetSet(n) { return `81 01 04 3f 01 ${hx(n)} ff`; },
   presetRecall(n) { return `81 01 04 3f 02 ${hx(n)} ff`; },
   panTiltInq: '81 09 06 12 ff',
