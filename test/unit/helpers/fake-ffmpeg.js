@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const cp = require('node:child_process');
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'soth-fakeff-'));
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ptz-fakeff-'));
 process.on('exit', () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ } });
 const write = (name, body, mode = 0o755) => { const p = path.join(dir, name); fs.writeFileSync(p, body, { mode }); fs.chmodSync(p, mode); return p; };
 
@@ -25,7 +25,7 @@ function loadStreams(ffmpegPath) {
   const spawns = [];
   const realSpawn = cp.spawn;
   cp.spawn = (...a) => { spawns.push(Date.now()); return realSpawn(...a); };
-  process.env.SOTH_FFMPEG = ffmpegPath;
+  process.env.PTZ_FFMPEG = ffmpegPath;
   const file = require.resolve('../../../src/streams.js');
   delete require.cache[file];
   const mod = require(file);

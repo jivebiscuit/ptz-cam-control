@@ -1,5 +1,5 @@
 {
-  "name": "soth-cam-control",
+  "name": "ptz-cam-control",
   "version": "0.2.0",
   "description": "PTZ camera control and multiview for 4 PTZOptics cameras",
   "main": "src/main.js",
@@ -19,8 +19,8 @@
     "globals": "^17.14.0"
   },
   "build": {
-    "appId": "com.soth.camcontrol",
-    "productName": "SOTH Cam Control",
+    "appId": "com.ptzcamcontrol.app",
+    "productName": "PTZ Cam Control",
     "npmRebuild": false,
     "files": [
       "src/**/*",
@@ -30,7 +30,7 @@
       "target": "portable"
     },
     "portable": {
-      "artifactName": "SOTH-Cam-Control-portable.exe"
+      "artifactName": "PTZ-Cam-Control-portable.exe"
     },
     "asarUnpack": [
       "node_modules/ffmpeg-static/**"
@@ -39,7 +39,7 @@
     "mac": {
       "identity": null,
       "extendInfo": {
-        "NSLocalNetworkUsageDescription": "SOTH Cam Control talks to the PTZ cameras on your local network (video, pan/tilt/zoom and settings)."
+        "NSLocalNetworkUsageDescription": "PTZ Cam Control talks to the PTZ cameras on your local network (video, pan/tilt/zoom and settings)."
       }
     }
   },

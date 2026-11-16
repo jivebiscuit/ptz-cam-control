@@ -27,13 +27,13 @@ test('oneOf and bool', () => {
 });
 
 test('isHost accepts real IPs and host names', () => {
-  for (const h of ['192.168.0.200', '10.0.0.1', '0.0.0.0', '255.255.255.255', 'cam1', 'cam-1.local', 'a.b.c', 'cam1.example.com']) {
+  for (const h of ['192.168.1.101', '10.0.0.1', '0.0.0.0', '255.255.255.255', 'cam1', 'cam-1.local', 'a.b.c', 'cam1.example.com']) {
     assert.ok(isHost(h), `should accept ${h}`);
   }
 });
 
 test('isHost rejects impossible IPs, IPv4 shorthand and injection-style text', () => {
-  const bad = ['', '300.1.1.1', '1.2.3', '1.2.3.4.5', '1.2.3.', '.1.2.3.4', '01234.1.1.1', '192.168.0.1.', 'cam 1', 'a/b', 'a:80',
-    '-bad', 'bad-', '<img>', '192.168.0.1&x=1', 'x'.repeat(300), null, 5, undefined];
+  const bad = ['', '300.1.1.1', '1.2.3', '1.2.3.4.5', '1.2.3.', '.1.2.3.4', '01234.1.1.1', '192.168.1.1.', 'cam 1', 'a/b', 'a:80',
+    '-bad', 'bad-', '<img>', '192.168.1.1&x=1', 'x'.repeat(300), null, 5, undefined];
   for (const h of bad) assert.ok(!isHost(h), `should reject ${JSON.stringify(h)}`);
 });

@@ -11,7 +11,7 @@ whose code shows exactly what it sends) was treated as the source of truth.
 |---|---|
 | Model | PTZOptics Move SE, SKU `PT30X-SE-GY-G3` (reports model `F64.HI`), 30x optical zoom |
 | Firmware | `SOC v9.1.46` on all four (web UI `v1.5.5`) |
-| Default addresses | 192.168.0.200 South, .201 Center, .202 North, .203 Rear |
+| Default addresses | 192.168.1.101-104 (Camera 1-4) |
 | Authentication | none on HTTP or VISCA (anyone on the network can control them) |
 | Built-in web page | `http://<ip>/` : reading its JavaScript (`/dist/build.his.min.js`, `/hisApplicationContext.js`) is the best way to learn what a setting really sends |
 
@@ -85,7 +85,7 @@ Position inquiries: pan/tilt `81 09 06 12 FF`, zoom `81 09 04 47 FF`.
 | Main | `rtsp://<ip>:554/1` | H.264 1920x1080 30 fps | ~8.6 Mbit/s each (the app does not use it) |
 | Sub | `rtsp://<ip>:554/2` | H.264 640x360 30 fps | ~2.2 Mbit/s each; all four within 2.15-2.19 even with different scenes, so probably constant-bitrate (inferred) |
 
-`/snapshot.jpg` works normally (~20-50 KB). **An empty (0-byte) snapshot was the first sign of South's stuck tracking
+`/snapshot.jpg` works normally (~20-50 KB). **An empty (0-byte) snapshot was the first sign of one camera's stuck tracking
 engine** (see Tracking).
 
 ## Scales and tables (verified on the cameras)
@@ -115,7 +115,7 @@ Only step 1 (1/30) and step 3 (1/60) were confirmed against a live camera; the r
 - **Motion Sync** (on by default) times pan, tilt and zoom to arrive together. With it on, a long move took ~6.8 s; with it
   off ~4.1 s (verified on one move). Off looks less smooth (axes finish at different times, not evaluated on screen). It is
   currently left **on**; it is a camera-wide setting, so it also applies to joystick recalls.
-- Slot 200 on Rear stores the Home position (a leftover from testing the save command).
+- Slot 200 on one camera stores the Home position (a leftover from testing the save command).
 
 ### Exposure
 - After switching the exposure mode, iris/shutter commands sent in the next few seconds can be ignored by the camera
@@ -141,9 +141,9 @@ Only step 1 (1/30) and step 3 (1/60) were confirmed against a live camera; the r
   lossTime: 6-60, startPosition / stopPosition / lossPosition: "now"|"home"|"<preset 0-254>", trackingOverlay: "on"|"off"}`.
   Out-of-range values answer `{"msg":"RequestError"}`. The joystick-style `param.cgi?set_overlay&autotracking&on|off` just
   sets `trackMode` to `tracking` / `off`.
-- The camera picks the person itself, so a poster with printed people can attract it (South locked onto a wall poster).
+- The camera picks the person itself, so a poster with printed people can attract it (one camera locked onto a wall poster).
   The documented way to bias it is a start preset aimed where the speaker stands and a short target-loss timeout (3-6 s).
-- **South's tracking once stopped working entirely** (no response in either mode, `snapshot.jpg` returned 0 bytes) while its
+- **One camera's tracking once stopped working entirely** (no response in either mode, `snapshot.jpg` returned 0 bytes) while its
   settings matched the others; a reboot fixed it.
 - Tracking is deliberately **never applied to more than one camera** in the app.
 

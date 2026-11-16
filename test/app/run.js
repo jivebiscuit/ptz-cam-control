@@ -8,14 +8,14 @@ const http = require('node:http');
 const { EventEmitter } = require('node:events');
 
 const { app, BrowserWindow } = require('electron');
-const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'soth-apptest-'));
+const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'ptz-apptest-'));
 app.setPath('userData', userData);                 // before main.js asks for the single-instance lock
-process.env.SOTH_FFMPEG = path.join(userData, 'no-such-ffmpeg'); // no video processes: tiles just show NO SIGNAL
-process.env.SOTH_TEST_HIDDEN = '1';                               // never put a window or Dock icon on the desktop
+process.env.PTZ_FFMPEG = path.join(userData, 'no-such-ffmpeg'); // no video processes: tiles just show NO SIGNAL
+process.env.PTZ_TEST_HIDDEN = '1';                               // never put a window or Dock icon on the desktop
 
 // ---- fake network: camera WRITES are recorded and "succeed"; everything else behaves like an unreachable camera ----
 const writes = []; // { cam: 0-3, what: 'home' | 'up' | 'ptzstop' | 'visca:81 01 ...' | ... }
-const camOf = (host) => Math.max(0, Number(String(host).split('.').pop()) - 200);
+const camOf = (host) => Math.max(0, Number(String(host).split('.').pop()) - 101);
 const isWrite = (m, p) => /post_image_value|ptzcmd|post_visca/.test(p) || (m === 'POST' && /api\/v1\/control\/track/.test(p));
 const label = (m, p) => (/ptzcmd&/.test(p) ? p.split('ptzcmd&')[1] : /post_image_value&/.test(p) ? 'image:' + p.split('post_image_value&')[1] : m === 'POST' && /track/.test(p) ? 'track' : p);
 function fakeRequest(onResponse, bodyText, fail) {
@@ -136,7 +136,7 @@ app.whenReady().then(async () => {
 
     console.log('\n-- the right camera gets the command --');
     await js(`document.querySelectorAll('.cell')[2].click(); 0`); await wait(200);
-    check((await js(`document.querySelector('#selName').textContent`)).includes('North'), 'clicking tile 3 selects North');
+    check((await js(`document.querySelector('#selName').textContent`)).includes('Camera 3'), 'clicking tile 3 selects Camera 3');
     const rec = await sent(async () => { await js(`document.querySelectorAll('#presets button')[2].dispatchEvent(new MouseEvent('click', { bubbles: true })); 0`); });
     check(rec.join() === 'poscall&3' && writes[0].cam === 2, 'preset 3 recalls preset 3 (not preset 0) on the selected camera');
     const sav = await sent(async () => { await js(`document.querySelectorAll('#presets button')[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })); 0`); });
@@ -206,14 +206,14 @@ app.whenReady().then(async () => {
     check((await js(`document.querySelectorAll('#scenes button').length`)) === 0, 'with no scenes saved the bar shows a hint, no buttons');
     await click('#settingsBtn'); await click('#addScene'); await click('#addScene');
     await js(`(() => { const r = document.querySelectorAll('#sceneFields .sf:not(.sfh)'); const set = (row, vals) => vals.forEach((v, k) => { row.querySelectorAll('input')[k].value = v; });
-      set(r[0], ['Sermon', '3', '4', '', '9']); set(r[1], ['Bells', '', '', '7', '']); document.querySelector('#saveCfg').click(); })()`); await wait(700);
-    check((await js(`document.querySelector('#dlg').hidden`)) && (await js(`[...document.querySelectorAll('#scenes button')].map((b) => b.textContent).join()`)) === 'Sermon,Bells', 'scenes added in Settings appear as buttons');
+      set(r[0], ['Wide', '3', '4', '', '9']); set(r[1], ['Closeup', '', '', '7', '']); document.querySelector('#saveCfg').click(); })()`); await wait(700);
+    check((await js(`document.querySelector('#dlg').hidden`)) && (await js(`[...document.querySelectorAll('#scenes button')].map((b) => b.textContent).join()`)) === 'Wide,Closeup', 'scenes added in Settings appear as buttons');
     check(/"scenes"/.test(fs.readFileSync(path.join(userData, 'config.json'), 'utf8')), 'scenes are saved to the settings file');
     const sc = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(400); });
     check(writes.length === 3 && [0, 1, 3].every((c) => writes.some((w) => w.cam === c && w.what === `poscall&${[3, 4, 0, 9][c]}`)) && !writes.some((w) => w.cam === 2), 'a scene recalls its preset on each camera at once and leaves blank cameras alone');
     check((await js(`document.querySelector('#scenes button[data-i="0"]').classList.contains('active')`)), 'the pressed scene is highlighted');
     await click('#scenes button[data-i="1"]'); await wait(400);
-    check((await js(`[...document.querySelectorAll('#scenes button.active')].map((b) => b.textContent).join()`)) === 'Bells', 'pressing another scene moves the highlight');
+    check((await js(`[...document.querySelectorAll('#scenes button.active')].map((b) => b.textContent).join()`)) === 'Closeup', 'pressing another scene moves the highlight');
     await js(`document.activeElement.blur(); 0`); await press('h'); await wait(200);
     check((await js(`document.querySelectorAll('#scenes button.active').length`)) === 0, 'moving a camera clears the highlighted scene');
     check(sc.length === 3, 'scene recall sent exactly one command per camera');
@@ -221,30 +221,30 @@ app.whenReady().then(async () => {
 
     console.log('\n-- ATEM Program / Preview --');
     await click('#settingsBtn');
-    await js(`document.querySelector('#atemIp').value = '192.168.0.240'; 0`);
+    await js(`document.querySelector('#atemIp').value = '192.168.1.240'; 0`);
     await js(`document.querySelectorAll('#atemInputs input')[1].value = '1'; document.querySelector('#saveCfg').click(); 0`); await wait(500);
     check(!(await js(`document.querySelector('#dlg').hidden`)) && /more than one camera is set to input 1/.test(await js(`document.querySelector('#cfgErr').textContent`)), 'two cameras on the same ATEM input is refused');
     await js(`document.querySelectorAll('#atemInputs input')[1].value = '2'; document.querySelector('#saveCfg').click(); 0`); await wait(700);
-    check(fakeAtem.ip === '192.168.0.240', 'saving an ATEM address starts the switcher link');
-    fakeAtem.enabled = true; fakeAtem.connected = true; fakeAtem.program = 2; fakeAtem.preview = 3; await wait(1000);   // input 2 = Center (camera index 1), input 3 = North
+    check(fakeAtem.ip === '192.168.1.240', 'saving an ATEM address starts the switcher link');
+    fakeAtem.enabled = true; fakeAtem.connected = true; fakeAtem.program = 2; fakeAtem.preview = 3; await wait(1000);   // input 2 = Camera 2 (index 1), input 3 = Camera 3
     const tallies = () => js(`[...document.querySelectorAll('.cell .tally')].map((e) => e.textContent).join()`);
     check((await tallies()) === ',PGM,PVW,', 'tiles show PGM on the Program camera and PVW on the Preview camera');
     // the preset buttons ask before moving a camera that is on air
     const presetClick = (k) => js(`document.querySelectorAll('#presets button')[${k}].dispatchEvent(new MouseEvent('click', { bubbles: true })); 0`);
-    await js(`document.querySelectorAll('.cell')[1].click(); 0`); await wait(200);   // Center, on air
+    await js(`document.querySelectorAll('.cell')[1].click(); 0`); await wait(200);   // Camera 2, on air
     await js(`window.__asked = []; window.confirm = (m) => { window.__asked.push(m); return false; }; 0`);
-    check(none(await sent(async () => { await presetClick(2); })) && (await js(`window.__asked.length`)) === 1 && /Center is ON AIR/.test(await js(`window.__asked[0]`)), 'a preset button on the on-air camera asks first, and does nothing when you say no');
+    check(none(await sent(async () => { await presetClick(2); })) && (await js(`window.__asked.length`)) === 1 && /Camera 2 is ON AIR/.test(await js(`window.__asked[0]`)), 'a preset button on the on-air camera asks first, and does nothing when you say no');
     await js(`window.confirm = (m) => { window.__asked.push(m); return true; }; 0`);
     check((await sent(async () => { await presetClick(2); })).join() === 'poscall&3' && writes[0].cam === 1, 'it moves the on-air camera when you say yes');
-    await js(`document.querySelectorAll('.cell')[0].click(); 0`); await wait(200);   // South, not on air
+    await js(`document.querySelectorAll('.cell')[0].click(); 0`); await wait(200);   // Camera 1, not on air
     check((await sent(async () => { await presetClick(2); })).join() === 'poscall&3' && (await js(`window.__asked.length`)) === 2, 'a camera that is not on air is moved without a question');
     await js(`window.confirm = () => true; 0`);
-    // Sermon = South 3, Center 4, North none, Rear 9. Center is on air, so it waits.
+    // Wide = Camera 1 preset 3, Camera 2 preset 4, Camera 3 none, Camera 4 preset 9. Camera 2 is on air, so it waits.
     const held = await sent(async () => { await click('#scenes button[data-i="0"]'); await wait(500); });
     check(writes.length === 2 && !writes.some((w) => w.cam === 1) && writes.some((w) => w.cam === 0 && w.what === 'poscall&3') && writes.some((w) => w.cam === 3 && w.what === 'poscall&9'), 'a scene does not move the camera that is on air');
     check((await js(`document.querySelector('#scenes button[data-i="0"]').className`)) === 'pending', 'the scene shows as waiting while a camera is held');
     check(held.length === 2 && /on air, will move when off Program/.test(await status()), 'the status line says which camera is waiting');
-    writes.length = 0; fakeAtem.program = 3; fakeAtem.preview = 2; await wait(1200);   // cut to North: Center is free
+    writes.length = 0; fakeAtem.program = 3; fakeAtem.preview = 2; await wait(1200);   // cut to Camera 3: Camera 2 is free
     check(writes.length === 1 && writes[0].cam === 1 && writes[0].what === 'poscall&4', 'the held camera moves as soon as it leaves Program');
     check((await js(`document.querySelector('#scenes button[data-i="0"]').className`)) === 'active', 'the scene becomes active once everything has been sent');
     // a scene still waiting is cancelled by an operator move; and the Preview camera is moved normally

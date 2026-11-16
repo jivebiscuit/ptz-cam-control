@@ -1,6 +1,6 @@
 // "Is there a newer release?" check against the GitHub Releases of this (private) repo.
 // It only ever looks and tells the user; installing is manual (open the release page, download, replace the app).
-// A private repo needs a read-only token: put it in <userData>/update-token.txt (or the SOTH_UPDATE_TOKEN env var).
+// A private repo needs a read-only token (a public repo needs none): put it in <userData>/update-token.txt (or the PTZ_UPDATE_TOKEN env var).
 const https = require('https');
 
 const REPO = 'jivebiscuit/soth-cam-control';
@@ -19,7 +19,7 @@ function isNewer(latest, current) {
 
 function fetchLatest(token, { host = 'api.github.com', timeout = 8000 } = {}) {
   return new Promise((resolve, reject) => {
-    const headers = { 'User-Agent': 'soth-cam-control', Accept: 'application/vnd.github+json' };
+    const headers = { 'User-Agent': 'ptz-cam-control', Accept: 'application/vnd.github+json' };
     if (token) headers.Authorization = `Bearer ${token}`;
     const req = https.get({ host, path: `/repos/${REPO}/releases/latest`, headers, timeout }, (res) => {
       let body = '';

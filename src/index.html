@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>SOTH Cam Control</title>
+<html><head><meta charset="utf-8"><title>PTZ Cam Control</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' http: data: blob:; style-src 'self' 'unsafe-inline'">
 <link rel="stylesheet" href="style.css"></head>
 <body>
@@ -20,7 +20,7 @@
       <div class="xr"><span class="lbl tip" title="Gain — electronic brightening of the picture. It makes a dark scene brighter without more light, but adds grain/noise, mostly in the shadows.">Gain</span><button class="sq" data-ex="gain,down">−</button><b id="exGain" class="exv">—</b><button class="sq" data-ex="gain,up">+</button></div>
       <p class="hint" id="exHint"></p>
 
-      <h3 class="tune">Auto-exposure tuning <span class="tip info" title="All of these are read live from the cameras. The line under each control shows every camera's value (S = South, C = Center, …); orange = differs from the selected camera. They apply in Auto, Shutter priority and Iris priority.">ⓘ</span></h3>
+      <h3 class="tune">Auto-exposure tuning <span class="tip info" title="All of these are read live from the cameras. The line under each control shows every camera's value (shown by the letter or number next to each camera's name); orange = differs from the selected camera. They apply in Auto, Shutter priority and Iris priority.">ⓘ</span></h3>
       <div class="sr"><span class="lbl tip" title="Meter region — which part of the frame the camera measures to decide how bright to make the picture. Center follows the middle of the frame (good for a speaker), Average uses the whole frame, Top uses the top, Smart picks the best area itself.">Meter</span>
         <select id="meterSel"><option value="">—</option><option value="0">Average</option><option value="1">Center</option><option value="2">Smart</option><option value="3">Top</option></select></div>
       <div class="per" id="per-meter"></div>
@@ -41,7 +41,7 @@
 
     <aside class="drawer closed" id="drawer-image" data-title="Image" data-accent="image" aria-hidden="true">
       <div id="imgControls"></div>
-      <p class="hint">Read from the cameras every 2 s. The line under each slider shows every camera's value (S = South, C = Center, …). Orange = differs from the selected camera. Sliders send on release.</p>
+      <p class="hint">Read from the cameras every 2 s. The line under each slider shows every camera's value (shown by the letter or number next to each camera's name). Orange = differs from the selected camera. Sliders send on release.</p>
       <div class="drawerFoot"><button class="secondary" id="copyImage" title="Copy luminance, saturation, contrast, sharpness and hue from this camera to the other cameras">Copy to other cameras</button></div>
     </aside>
 
@@ -145,7 +145,7 @@
   <div id="sceneFields"></div>
   <div class="row"><button id="addScene" class="secondary">+ Add scene</button></div>
   <h3>ATEM switcher <small>(optional · shows Program/Preview on the tiles; a scene waits to move a camera that is on air)</small></h3>
-  <div class="row"><span class="lbl">Address</span><input id="atemIp" maxlength="253" placeholder="e.g. 192.168.0.240 (blank = off)" aria-label="ATEM address"></div>
+  <div class="row"><span class="lbl">Address</span><input id="atemIp" maxlength="253" placeholder="e.g. 192.168.1.240 (blank = off)" aria-label="ATEM address"></div>
   <div class="row" id="atemInputs"></div>
   <div id="cfgErr" class="cfgErr" role="alert" hidden></div>
   <div class="row"><button id="saveCfg">Save</button><button id="cancelCfg">Cancel</button></div>

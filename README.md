@@ -1,11 +1,11 @@
-# SOTH Cam Control
+# PTZ Cam Control
 
 A desktop app (Electron) for controlling and monitoring four PTZOptics Move SE cameras during a livestream:
 live multiview, pan/tilt/zoom, focus, presets, one-button **scenes** (a preset on every camera at once), exposure / image / color / tracking drawers with live read-back,
 visual alerts when a camera is in an abnormal state (tracking on, manual focus, focus locked, values that differ from the other cameras),
 and, with an optional Blackmagic **ATEM** link, Program/Preview badges that keep scenes and presets from moving the camera that is on air.
 
-Default cameras: South 192.168.0.200, Center .201, North .202, Rear .203. Change names and addresses in **Settings**.
+Default cameras: Camera 1-4 at 192.168.1.101-104. Change names and addresses in **Settings**.
 
 ## Requirements
 - Node 22 and npm (to run or build from source)
@@ -24,7 +24,7 @@ Arrow keys pan/tilt (hold to move, release to stop), Space stops, `H` goes Home,
 Shortcuts are ignored while typing in a field.
 
 ## Scenes
-A scene is a named button (up to 12) that recalls one preset on every camera at once, e.g. Sermon, Baptism, Choir. Add them in **⚙ Settings → Scenes**: a name plus a preset number (1–254) per camera; leave a camera blank to keep it where it is. The last scene pressed stays highlighted until a camera in it moves (by hand, by tracking, or by any move/zoom/home/preset command).
+A scene is a named button (up to 12) that recalls one preset on every camera at once, e.g. Wide, Closeup, Panel. Add them in **⚙ Settings → Scenes**: a name plus a preset number (1–254) per camera; leave a camera blank to keep it where it is. The last scene pressed stays highlighted until a camera in it moves (by hand, by tracking, or by any move/zoom/home/preset command).
 
 ### ATEM switcher (optional)
 In **⚙ Settings → ATEM switcher** enter the switcher's address and which ATEM input each camera is on. The app then shows a red **PGM** (Program) and green **PVW** (Preview) badge on those tiles. The link is read-only; nothing is ever sent to the switcher.
@@ -32,8 +32,8 @@ Scenes never move the camera that is on air: its recall is held, the scene butto
 
 ## Settings and environment
 - Settings are saved in the app's user-data folder as `config.json`; a missing or damaged file falls back to defaults (valid fields are kept).
-- `SOTH_FFMPEG=/path/to/ffmpeg` uses a different ffmpeg.
-- `SOTH_TEST_HIDDEN=1` keeps the window hidden (used by the app test).
+- `PTZ_FFMPEG=/path/to/ffmpeg` uses a different ffmpeg.
+- `PTZ_TEST_HIDDEN=1` keeps the window hidden (used by the app test).
 - Only one copy of the app can run at once (cameras allow one VISCA session each).
 
 ---
@@ -114,19 +114,19 @@ Other folders: `test/unit` (unit tests), `test/app` (end-to-end test), `scripts/
 ## Build and release
 `ffmpeg-static` installs only the binary for the platform you run `npm install` on, so **build each platform on that platform**. The build scripts (`scripts/ffmpeg-check.js`) check that the bundled ffmpeg matches the target, both before and after packaging, and refuse to continue if it does not. In the packaged app ffmpeg is unpacked from the asar (`asarUnpack`). `npmRebuild` is off in the build config: `atem-connection` pulls in a native module (`@julusian/freetype2`) that ships prebuilt binaries, and letting electron-builder recompile it needs Visual Studio and fails without it.
 
-**Windows:** releases are built on a Windows machine, not in CI. To make one: bump `version` in `package.json` (`npm version X.Y.Z --no-git-tag-version`), run `npm run lint`, `npm test` and `npm run test:app`, then `npm run dist:win` (it makes `dist/SOTH-Cam-Control-portable.exe`). Commit, tag (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`) and publish with `gh release create vX.Y.Z dist/SOTH-Cam-Control-portable.exe --title vX.Y.Z --notes "..."`. The unit tests that use fake POSIX ffmpegs (the video server and feed-failure tests) are skipped on Windows; run `npm test` on Linux or in WSL as well when you change `streams.js`. The exe needs no Node or npm on the machine that runs it. It is not code-signed, so Windows SmartScreen may warn: choose More info > Run anyway.
+**Windows:** releases are built on a Windows machine, not in CI. To make one: bump `version` in `package.json` (`npm version X.Y.Z --no-git-tag-version`), run `npm run lint`, `npm test` and `npm run test:app`, then `npm run dist:win` (it makes `dist/PTZ-Cam-Control-portable.exe`). Commit, tag (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`) and publish with `gh release create vX.Y.Z dist/PTZ-Cam-Control-portable.exe --title vX.Y.Z --notes "..."`. The unit tests that use fake POSIX ffmpegs (the video server and feed-failure tests) are skipped on Windows; run `npm test` on Linux or in WSL as well when you change `streams.js`. The exe needs no Node or npm on the machine that runs it. It is not code-signed, so Windows SmartScreen may warn: choose More info > Run anyway.
 
 **Mac:** run `npm run dist:mac` on a Mac. The app is ad-hoc signed (`scripts/adhoc-sign.js`) and includes a Local Network usage description (see below).
 
 ## Troubleshooting a tile that says NO SIGNAL
 The tile shows the reason when it knows it:
-- **ffmpeg not found / wrong platform**: reinstall dependencies on this platform, or set `SOTH_FFMPEG`.
+- **ffmpeg not found / wrong platform**: reinstall dependencies on this platform, or set `PTZ_FFMPEG`.
 - **Connection refused / timed out**: camera off, wrong address, or not on the same network.
-- **Connection works but no video**: another RTSP client may be using the stream, or the camera needs a reboot (South once needed one for stuck tracking).
+- **Connection works but no video**: another RTSP client may be using the stream, or the camera needs a reboot (one camera once needed one for stuck tracking).
 
 ## Mac: packaged app freezes or shows "No route to host"
 macOS blocks apps from local-network devices until they are allowed in **System Settings → Privacy & Security → Local Network**. Without it the feeds say "No route to host" and the app can freeze (beach ball) because closing the blocked sockets stalls.
-The build includes the permission text and is ad-hoc signed, but macOS may still not list or prompt for it. Copy the app to /Applications, open the Local Network page, click **+**, add *SOTH Cam Control.app*, then relaunch (this fixed it on the development Mac). `npm start` always works because Electron.app is already allowed. Windows has no such permission.
+The build includes the permission text and is ad-hoc signed, but macOS may still not list or prompt for it. Copy the app to /Applications, open the Local Network page, click **+**, add *PTZ Cam Control.app*, then relaunch. `npm start` always works because Electron.app is already allowed. Windows has no such permission.
 
 ## More
 Verified camera behavior, command formats and gotchas: [docs/camera-notes.md](docs/camera-notes.md).

@@ -9,8 +9,8 @@ test('the default config is valid and unchanged by validation', () => {
 });
 
 test('names and addresses are trimmed; unknown keys are dropped', () => {
-  const r = validateConfig({ ...good(), evil: 1, cameras: [{ name: '  North  ', ip: ' 1.2.3.4 ', extra: 'x' }] });
-  assert.deepEqual(r, { cameras: [{ name: 'North', ip: '1.2.3.4' }], viscaPort: 5678, scenes: [], atem: { ip: '', inputs: [1] } });
+  const r = validateConfig({ ...good(), evil: 1, cameras: [{ name: '  Alpha  ', ip: ' 1.2.3.4 ', extra: 'x' }] });
+  assert.deepEqual(r, { cameras: [{ name: 'Alpha', ip: '1.2.3.4' }], viscaPort: 5678, scenes: [], atem: { ip: '', inputs: [1] } });
 });
 
 test('markup-looking names are allowed as plain text (the page escapes them)', () => {
@@ -46,12 +46,12 @@ test('null, garbage and wrong types fall back to the defaults', () => {
 
 test('cloneDefaults returns an independent copy', () => {
   const a = cloneDefaults(); a.cameras[0].name = 'changed';
-  assert.equal(DEFAULTS.cameras[0].name, 'South');
+  assert.equal(DEFAULTS.cameras[0].name, 'Camera 1');
 });
 
 test('scenes: valid ones are kept (trimmed, padded to the camera count); blank means leave the camera alone', () => {
-  const r = validateConfig({ ...good(), scenes: [{ name: ' Sermon ', presets: [3, '4', null, 254], x: 1 }, { name: 'Bells', presets: [1] }] });
-  assert.deepEqual(r.scenes, [{ name: 'Sermon', presets: [3, 4, null, 254] }, { name: 'Bells', presets: [1, null, null, null] }]);
+  const r = validateConfig({ ...good(), scenes: [{ name: ' Wide ', presets: [3, '4', null, 254], x: 1 }, { name: 'Closeup', presets: [1] }] });
+  assert.deepEqual(r.scenes, [{ name: 'Wide', presets: [3, 4, null, 254] }, { name: 'Closeup', presets: [1, null, null, null] }]);
 });
 
 test('scenes: bad input is refused with a message the user can act on', () => {
@@ -78,8 +78,8 @@ test('scenes: a damaged saved file keeps the usable scenes and drops the rest', 
 });
 
 test('atem: address and per-camera input numbers are validated; blank input = not on the switcher', () => {
-  const ok = validateConfig({ ...good(), atem: { ip: ' 192.168.0.240 ', inputs: [5, '2', null, 8] } });
-  assert.deepEqual(ok.atem, { ip: '192.168.0.240', inputs: [5, 2, null, 8] });
+  const ok = validateConfig({ ...good(), atem: { ip: ' 192.168.1.240 ', inputs: [5, '2', null, 8] } });
+  assert.deepEqual(ok.atem, { ip: '192.168.1.240', inputs: [5, 2, null, 8] });
   assert.deepEqual(validateConfig({ ...good(), atem: { ip: '', inputs: [1, 2, 3, 4] } }).atem, { ip: '', inputs: [1, 2, 3, 4] });
   const bad = (atem) => ({ ...good(), atem });
   assert.throws(() => validateConfig(bad({ ip: '999.1.1.1', inputs: [1, 2, 3, 4] })), /ATEM: "999.1.1.1" is not a valid IP/);

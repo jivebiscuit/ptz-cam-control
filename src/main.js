@@ -139,7 +139,7 @@ ipcMain.handle('cam:visca', async (_e, i, a) => {
 // ---- update check (GitHub Releases of the private repo; needs a read-only token, see updater.js) ----
 const tokenPath = () => path.join(app.getPath('userData'), 'update-token.txt');
 function updateToken() {
-  if (process.env.SOTH_UPDATE_TOKEN) return process.env.SOTH_UPDATE_TOKEN.trim();
+  if (process.env.PTZ_UPDATE_TOKEN) return process.env.PTZ_UPDATE_TOKEN.trim();
   try { return fs.readFileSync(tokenPath(), 'utf8').trim(); } catch { return ''; }
 }
 // manual = from the menu: always say what happened. On launch: stay silent unless there is a newer version.
@@ -182,8 +182,8 @@ function createWindow() {
   rebuildClients();
   // this app only ever shows its own page: no permission prompts (camera/mic/location...), no pop-ups, no navigation away
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-  // Automated tests set SOTH_TEST_HIDDEN=1 so they never put a window (or a Dock icon) on the desktop.
-  const hidden = process.env.SOTH_TEST_HIDDEN === '1';
+  // Automated tests set PTZ_TEST_HIDDEN=1 so they never put a window (or a Dock icon) on the desktop.
+  const hidden = process.env.PTZ_TEST_HIDDEN === '1';
   if (hidden && process.platform === 'darwin' && app.dock) app.dock.hide();
   win = new BrowserWindow({
     width: 1500, height: 900, backgroundColor: '#111', show: !hidden,

@@ -4,10 +4,10 @@ const { int, isHost } = require('./validate');
 const MAX_CAMERAS = 4; // the multiview grid, keyboard shortcuts 1-4 and the drawers are built for up to four
 const DEFAULTS = {
   cameras: [
-    { name: 'South', ip: '192.168.0.200' },
-    { name: 'Center', ip: '192.168.0.201' },
-    { name: 'North', ip: '192.168.0.202' },
-    { name: 'Rear', ip: '192.168.0.203' },
+    { name: 'Camera 1', ip: '192.168.1.101' },
+    { name: 'Camera 2', ip: '192.168.1.102' },
+    { name: 'Camera 3', ip: '192.168.1.103' },
+    { name: 'Camera 4', ip: '192.168.1.104' },
   ],
   viscaPort: 5678,
   scenes: [], // [{ name, presets: [preset number or null per camera] }]; null leaves that camera where it is
@@ -98,7 +98,7 @@ function sanitizeSaved(saved) {
   if (!saved || typeof saved !== 'object') return out;
   if (Array.isArray(saved.cameras) && saved.cameras.length >= 1 && saved.cameras.length <= MAX_CAMERAS) {
     out.cameras = saved.cameras.map((c, i) => {
-      const fallback = DEFAULTS.cameras[i] || { name: `Camera ${i + 1}`, ip: '192.168.0.200' };
+      const fallback = DEFAULTS.cameras[i] || { name: `Camera ${i + 1}`, ip: '192.168.1.101' };
       const name = typeof (c && c.name) === 'string' && c.name.trim().length >= 1 && c.name.trim().length <= 24 ? c.name.trim() : fallback.name;
       const ip = typeof (c && c.ip) === 'string' && isHost(c.ip.trim()) ? c.ip.trim() : fallback.ip;
       return { name, ip };

@@ -4,9 +4,9 @@ const { spawn } = require('child_process');
 const http = require('http');
 const crypto = require('crypto');
 
-// ffmpeg-static ships ONE platform's binary (whichever platform `npm install` ran on); SOTH_FFMPEG overrides it
+// ffmpeg-static ships ONE platform's binary (whichever platform `npm install` ran on); PTZ_FFMPEG overrides it
 // (e.g. to point at a system ffmpeg). Inside a packaged app the binary lives in app.asar.unpacked.
-let ffmpegPath = process.env.SOTH_FFMPEG || require('ffmpeg-static');
+let ffmpegPath = process.env.PTZ_FFMPEG || require('ffmpeg-static');
 if (ffmpegPath && ffmpegPath.includes('app.asar')) ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
 
 const BOUNDARY = 'ffmpeg';

@@ -46,7 +46,7 @@ function initControls() {
 
   // keyboard: 1-4 select a camera, arrows move, +/- zoom, space stop, H home.
   // Shortcuts only run when you are NOT typing or using a form control, with no Ctrl/Cmd/Alt held, and with the
-  // Settings dialog closed; otherwise e.g. typing "North" in a name box would send Home to a camera.
+  // Settings dialog closed; otherwise e.g. typing a camera name in a name box would send Home to a camera.
   const keys = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   // '+'/'=' and '-'/'_' are the same physical keys, so a key can be released as the other character if Shift is let go first
   const actionOf = (k) => (keys[k] ? k : k === '+' || k === '=' ? 'zoomin' : k === '-' || k === '_' ? 'zoomout' : null);
