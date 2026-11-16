@@ -136,7 +136,7 @@ ipcMain.handle('cam:visca', async (_e, i, a) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 
-// ---- update check (GitHub Releases of the private repo; needs a read-only token, see updater.js) ----
+// ---- update check (latest GitHub Release; see updater.js) ----
 const tokenPath = () => path.join(app.getPath('userData'), 'update-token.txt');
 function updateToken() {
   if (process.env.PTZ_UPDATE_TOKEN) return process.env.PTZ_UPDATE_TOKEN.trim();
@@ -155,10 +155,8 @@ async function runUpdateCheck(manual) {
   else if (r.state === 'error') { opts.type = 'warning'; opts.message = 'Could not check for updates.'; opts.detail = r.error; }
   else {
     opts.type = 'warning';
-    opts.message = r.state === 'denied' ? 'GitHub refused the update token.' : 'No update token set.';
-    opts.detail = `The repo is private, so checking needs a read-only GitHub token (fine-grained, this repo only, "Contents: read").
-Save it as a single line in:
-${tokenPath()}`;
+    opts.message = 'Could not check for updates.';
+    opts.detail = 'GitHub did not return the latest release. Check your internet connection.';
   }
   const { response } = await (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts));
   if (r.state === 'available' && response === 0 && /^https:\/\/github\.com\//.test(r.url || '')) shell.openExternal(r.url);

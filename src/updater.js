@@ -1,9 +1,9 @@
-// "Is there a newer release?" check against the GitHub Releases of this (private) repo.
+// "Is there a newer release?" check against the GitHub Releases of this repo.
 // It only ever looks and tells the user; installing is manual (open the release page, download, replace the app).
-// A private repo needs a read-only token (a public repo needs none): put it in <userData>/update-token.txt (or the PTZ_UPDATE_TOKEN env var).
+// A public repo needs no token; for a private one put a read-only token in <userData>/update-token.txt (or the PTZ_UPDATE_TOKEN env var).
 const https = require('https');
 
-const REPO = 'jivebiscuit/soth-cam-control';
+const REPO = 'jivebiscuit/ptz-cam-control';
 
 // "v1.2.3" / "1.2.3-beta" -> [1,2,3]; null if it is not a version
 function parseVersion(s) {

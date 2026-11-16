@@ -1,6 +1,6 @@
 {
   "name": "ptz-cam-control",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "PTZ camera control and multiview for 4 PTZOptics cameras",
   "main": "src/main.js",
   "scripts": {
