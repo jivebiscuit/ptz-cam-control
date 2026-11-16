@@ -5,6 +5,8 @@ live multiview, pan/tilt/zoom, focus, presets, one-button **scenes** (a preset o
 visual alerts when a camera is in an abnormal state (tracking on, manual focus, focus locked, values that differ from the other cameras),
 and, with an optional Blackmagic **ATEM** link, Program/Preview badges that keep scenes and presets from moving the camera that is on air.
 
+**New to the app? Read the [operator guide](docs/operator-guide.md).**
+
 Default cameras: Camera 1-4 at 192.168.1.101-104. Change names and addresses in **Settings**.
 
 ## Requirements
@@ -99,7 +101,7 @@ The page is plain scripts that share one global scope, loaded in this order by `
 (`tiles`, `controls`, `settings`, `position`, `exposure`, `drawers`, `image`, `adv`, `color`, `scenewatch`, `onair`, `scenes`, `tracking`) and `app` last (start-up).
 New page scripts must be added to `index.html`; lint reads that list, so it knows their shared names.
 
-Other folders: `test/unit` (unit tests), `test/app` (end-to-end test), `scripts/` (run and build helpers), `docs/camera-notes.md` (verified camera behavior).
+Other folders: `docs/` (the [operator guide](docs/operator-guide.md) and camera notes), `test/unit` (unit tests), `test/app` (end-to-end test), `scripts/` (run and build helpers), `docs/camera-notes.md` (verified camera behavior).
 
 ## Commands
 | Command | What it does |
