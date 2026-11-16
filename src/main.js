@@ -189,7 +189,6 @@ function createWindow() {
     width: 1500, height: 900, backgroundColor: '#111', show: !hidden,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: !hidden },
   });
-  win.setMenuBarVisibility(false);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e, url) => { if (url !== win.webContents.getURL()) e.preventDefault(); });
   win.on('closed', () => { win = null; });
