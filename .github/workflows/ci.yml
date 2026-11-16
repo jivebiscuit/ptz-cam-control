@@ -1,0 +1,25 @@
+# Lint and unit tests on every pull request and every push to main.
+# Runs on Linux, so it also covers the video-server and ffmpeg-failure tests that are skipped on Windows.
+# The end-to-end app test (npm run test:app) needs a desktop session and is run locally.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1' # lint and unit tests never start Electron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
