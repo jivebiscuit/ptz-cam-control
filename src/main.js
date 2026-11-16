@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { ViscaClient, cmds, getPosition } = require('./visca');
@@ -7,6 +7,7 @@ const { httpGet, trackGet, trackSet, imageConf, advConf } = require('./camhttp')
 const { int, oneOf, bool } = require('./validate');
 const { cloneDefaults, validateConfig, sanitizeSaved } = require('./config');
 const atem = require('./atem');
+const { checkForUpdate } = require('./updater');
 const streams = new StreamServer();
 
 const cfgPath = () => path.join(app.getPath('userData'), 'config.json');
@@ -135,6 +136,44 @@ ipcMain.handle('cam:visca', async (_e, i, a) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 
+// ---- update check (GitHub Releases of the private repo; needs a read-only token, see updater.js) ----
+const tokenPath = () => path.join(app.getPath('userData'), 'update-token.txt');
+function updateToken() {
+  if (process.env.SOTH_UPDATE_TOKEN) return process.env.SOTH_UPDATE_TOKEN.trim();
+  try { return fs.readFileSync(tokenPath(), 'utf8').trim(); } catch { return ''; }
+}
+// manual = from the menu: always say what happened. On launch: stay silent unless there is a newer version.
+async function runUpdateCheck(manual) {
+  const r = await checkForUpdate(app.getVersion(), updateToken());
+  if (!manual && r.state !== 'available') return;
+  const opts = { type: 'info', title: 'Updates', buttons: ['OK'], message: '' };
+  if (r.state === 'available') {
+    opts.message = `Version ${r.version} is available (you have ${app.getVersion()}).`;
+    opts.detail = 'Open the release page to download it, then replace the app.';
+    opts.buttons = ['Open release page', 'Later'];
+  } else if (r.state === 'up-to-date') opts.message = `You are up to date (${app.getVersion()}).`;
+  else if (r.state === 'error') { opts.type = 'warning'; opts.message = 'Could not check for updates.'; opts.detail = r.error; }
+  else {
+    opts.type = 'warning';
+    opts.message = r.state === 'denied' ? 'GitHub refused the update token.' : 'No update token set.';
+    opts.detail = `The repo is private, so checking needs a read-only GitHub token (fine-grained, this repo only, "Contents: read").
+Save it as a single line in:
+${tokenPath()}`;
+  }
+  const { response } = await (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts));
+  if (r.state === 'available' && response === 0 && /^https:\/\/github\.com\//.test(r.url || '')) shell.openExternal(r.url);
+}
+function buildMenu() {
+  const mac = process.platform === 'darwin';
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(mac ? [{ role: 'appMenu' }] : []),
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    { label: 'Help', submenu: [{ label: 'Check for Updates…', click: () => runUpdateCheck(true) }] },
+  ]));
+}
+
 // ---- window ----
 let win = null;
 function createWindow() {
@@ -150,11 +189,12 @@ function createWindow() {
     width: 1500, height: 900, backgroundColor: '#111', show: !hidden,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: !hidden },
   });
-  win.setMenuBarVisibility(false);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e, url) => { if (url !== win.webContents.getURL()) e.preventDefault(); });
   win.on('closed', () => { win = null; });
   win.loadFile(path.join(__dirname, 'index.html'));
+  buildMenu();
+  if (!hidden && app.isPackaged) runUpdateCheck(false);
 }
 
 // Only one copy of the app may run: two copies would fight over each camera's single VISCA connection and double the polling.
